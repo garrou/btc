@@ -40,9 +40,11 @@ async function api(path) {
 const state = { blocks: [], upcoming: [], txs: [], seen: new Set(), selectedId: null, focusId: null };
 
 function blockCard(b, fresh) {
-  return el('button', { class: `block${fresh ? ' fresh' : ''}${b.id === state.selectedId ? ' selected' : ''}`,
-      'data-id': b.id, style: `--fill:${Math.min(1, b.weight / 4e6)}`,
-      onclick: () => (scene3d ? focusSlot(b.id) : openBlock(b.id)), ondblclick: () => openBlock(b.id) },
+  return el('button', {
+    class: `block${fresh ? ' fresh' : ''}${b.id === state.selectedId ? ' selected' : ''}`,
+    'data-id': b.id, style: `--fill:${Math.min(1, b.weight / 4e6)}`,
+    onclick: () => (scene3d ? focusSlot(b.id) : openBlock(b.id)), ondblclick: () => openBlock(b.id)
+  },
     el('b', {}, `#${nf.format(b.height)}`),
     el('span', {}, `${nf.format(b.tx_count)} tx`),
     el('span', {}, `${(b.size / 1e6).toFixed(2)} Mo`),
@@ -53,8 +55,10 @@ function blockCard(b, fresh) {
 function upcomingCard(m, i) {
   const [lo, hi] = m.feeRange ? [m.feeRange[0], m.feeRange.at(-1)] : [0, 0];
   const first = i === 0; // the first projected block is the next block, shown in 3D
-  return el('div', { class: `block pending${first && state.focusId === NEXT_ID ? ' selected' : ''}${first ? ' clickable' : ''}`,
-      style: `--fill:${Math.min(1, m.blockVSize / 1e6)}`, onclick: first ? () => focusSlot(NEXT_ID) : null },
+  return el('div', {
+    class: `block pending${first && state.focusId === NEXT_ID ? ' selected' : ''}${first ? ' clickable' : ''}`,
+    style: `--fill:${Math.min(1, m.blockVSize / 1e6)}`, onclick: first ? () => focusSlot(NEXT_ID) : null
+  },
     el('b', {}, 'Prochain'),
     el('span', {}, `${nf.format(m.nTx)} tx`),
     el('span', {}, `~${Math.round(m.medianFee)} sat/vB`),
@@ -88,16 +92,18 @@ const DETAIL = 4;         // the most recent (and the selected) blocks are detai
 const NEXT_ID = 'next';
 const stage = $('.stage');
 let scene3d = null;
-try { scene3d = window.Block3D?.create($('#scene'), {
-  tooltip: $('#tip3d'),
-  describe: (t) => t.coinbase
-    ? 'Coinbase (récompense du bloc)'
-    : t.approx
-      ? `${short(t.txid, 12, 8)}\n(taille et frais indisponibles)`
-      : `${short(t.txid, 12, 8)}\n${t.rate.toFixed(1)} sat/vB · ${nf.format(t.vsize)} vB\nfrais ${nf.format(t.fee)} sats`,
-  onPick: (t) => openTx(t.txid),
-  onFocus: (id) => focusSlot(id),
-}) ?? null; } catch (e) { console.warn('3D scene unavailable (no WebGL?)', e); scene3d = null; }
+try {
+  scene3d = window.Block3D?.create($('#scene'), {
+    tooltip: $('#tip3d'),
+    describe: (t) => t.coinbase
+      ? 'Coinbase (récompense du bloc)'
+      : t.approx
+        ? `${short(t.txid, 12, 8)}\n(taille et frais indisponibles)`
+        : `${short(t.txid, 12, 8)}\n${t.rate.toFixed(1)} sat/vB · ${nf.format(t.vsize)} vB\nfrais ${nf.format(t.fee)} sats`,
+    onPick: (t) => openTx(t.txid),
+    onFocus: (id) => focusSlot(id),
+  }) ?? null;
+} catch (e) { console.warn('3D scene unavailable (no WebGL?)', e); scene3d = null; }
 if (!scene3d) stage.hidden = true; // Three.js not loaded (offline / CDN blocked)
 else {
   $('#rotate').addEventListener('change', (e) => scene3d.setAutoRotate(e.target.checked));
@@ -351,16 +357,29 @@ function show(...nodes) {
 const fields = (rows) => el('dl', {}, rows.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
 const addrLine = (addr, sats) => el('li', {}, el('span', { class: 'mono' }, addr ?? 'OP_RETURN / non standard'), el('span', {}, btc(sats)));
 
+// Total of a tx's inputs in sats (null for a coinbase: new coins, no input value). partial = some prevout was unavailable.
+function inputTotal(tx) {
+  if (tx.vin.some((i) => i.is_coinbase)) return null;
+  let sum = 0, partial = false;
+  for (const i of tx.vin) { if (i.prevout?.value != null) sum += i.prevout.value; else partial = true; }
+  return { sum, partial };
+}
+const outputTotal = (tx) => tx.vout.reduce((s, o) => s + (o.value || 0), 0);
+const moreRow = (n) => el('li', { class: 'more' }, `… et ${nf.format(n)} autre${n > 1 ? 's' : ''} (non affichée${n > 1 ? 's' : ''})`);
+
 function txCard(tx, linked = true) {
   const inputs = tx.vin.map((i) => i.is_coinbase ? addrLine('Coinbase (nouveaux BTC)', 0) : addrLine(i.prevout?.scriptpubkey_address, i.prevout?.value ?? 0));
   const outputs = tx.vout.map((o) => addrLine(o.scriptpubkey_address, o.value));
+  const inTotal = inputTotal(tx);
   const id = linked
     ? el('button', { class: 'link mono', onclick: () => openTx(tx.txid) }, tx.txid)
     : el('span', { class: 'mono' }, tx.txid);
   return el('div', { class: 'tx-card' }, id,
     el('div', { class: 'io' },
-      el('div', {}, el('b', {}, `Entrées (${tx.vin.length})`), el('ul', {}, inputs.slice(0, 20))),
-      el('div', {}, el('b', {}, `Sorties (${tx.vout.length})`), el('ul', {}, outputs.slice(0, 20)))));
+      el('div', {}, el('b', {}, `Entrées (${tx.vin.length})`), el('span', { class: 'io-total' }, inTotal ? `${inTotal.partial ? '≥ ' : ''}${btc(inTotal.sum)}` : 'nouveaux BTC'),
+        el('ul', {}, [...inputs.slice(0, 20), ...(inputs.length > 20 ? [moreRow(inputs.length - 20)] : [])])),
+      el('div', {}, el('b', {}, `Sorties (${tx.vout.length})`), el('span', { class: 'io-total' }, btc(outputTotal(tx))),
+        el('ul', {}, [...outputs.slice(0, 20), ...(outputs.length > 20 ? [moreRow(outputs.length - 20)] : [])]))));
 }
 
 let detailSeq = 0; // only the latest detail request may update the dialog
@@ -377,7 +396,8 @@ async function openTx(txid) {
       ['Statut', st.confirmed
         ? el('span', {}, 'Confirmée dans le bloc ', el('button', { class: 'link', onclick: () => openBlock(st.block_hash) }, `#${nf.format(st.block_height)}`), ` · ${date(st.block_time)}`)
         : 'Non confirmée (mempool)'],
-      ['Montant sorti', btc(out)],
+      ...(inputTotal(tx) ? [['Total dépensé (entrées)', `${inputTotal(tx).partial ? '≥ ' : ''}${btc(inputTotal(tx).sum)}`]] : []),
+      ['Total envoyé (sorties)', btc(out)],
       ['Frais', tx.fee != null ? `${nf.format(tx.fee)} sats (${(tx.fee / (tx.weight / 4)).toFixed(1)} sat/vB)` : '—'],
       ['Taille', `${nf.format(tx.size)} o · ${nf.format(Math.ceil(tx.weight / 4))} vB`],
     ]), txCard(tx, false));

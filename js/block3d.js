@@ -20,7 +20,7 @@
   const FLIGHT = 1.2;       // fall duration (s)
   const POP = 0.35;         // tower pop duration on landing (s)
   const FLASH = 0.7;        // white flash duration (s)
-  const THEME ={ mined: 0xf7931a, next: 0x4cc9f0 };
+  const THEME = { mined: 0xf7931a, next: 0x4cc9f0 };
 
   // Squarified treemap: vals (>0) -> rectangles whose area is proportional to the value.
   // capacity: reference total for the area scale (≥ sum of values); a sparsely filled block leaves empty space
@@ -138,8 +138,10 @@
       label.position.set(0, FRAME_H + 5, 0); group.add(label);
       group.position.y = 28; // new blocks "fall" into place
       scene.add(group);
-      const slot = { id: meta.id, kind: meta.kind, group, cage, glass, targetX: 0, mesh: null, txs: null,
-        list: [], rects: [], heights: [], base: null, t: 0, growing: false, arrivals: [], stream: [], pulse: 0 };
+      const slot = {
+        id: meta.id, kind: meta.kind, group, cage, glass, targetX: 0, mesh: null, txs: null,
+        list: [], rects: [], heights: [], base: null, t: 0, growing: false, arrivals: [], stream: [], pulse: 0
+      };
       slots.set(meta.id, slot);
       return slot;
     }

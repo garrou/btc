@@ -21,8 +21,10 @@
     if (!canvas || !canvas.getContext) return null;
     const ctx = canvas.getContext('2d');
     const $ = (sel) => root.querySelector(sel);
-    const el = { target: $('[data-m=target]'), hashes: $('[data-m=hashes]'), unit: $('[data-m=unit]'),
-      attempt: $('[data-m=attempt]'), banner: $('[data-m=banner]'), chain: $('[data-m=chain]') };
+    const el = {
+      target: $('[data-m=target]'), hashes: $('[data-m=hashes]'), unit: $('[data-m=unit]'),
+      attempt: $('[data-m=attempt]'), banner: $('[data-m=banner]'), chain: $('[data-m=chain]')
+    };
 
     let W = 0, H = 0, rows = [], hashrate = 0, zeros = 19, visible = true;
     let dots = [], sparks = [], gateFlash = 0, hashes = 0, tickAcc = 0;
