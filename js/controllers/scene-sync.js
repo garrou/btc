@@ -9,7 +9,8 @@
   let scene = null;
   const projection = BTC.projection.create();
   const cache = new Map();   // block id -> Promise<txs>: the same array reference avoids rebuilding the scene
-  const status = new Map();  // block id -> 'loading' | 'error' (until the block is displayed)
+  const status = new Map();  // block id -> 'loading' | 'error' (will retry) | 'failed' (gave up), until the block is displayed
+  const light = new Set();   // ids of the blocks currently shown as a light shape (no per-tx detail)
   const retryTimers = new Map(), retryCount = new Map();
   let projTimer = 0, projShown = false;
 
@@ -21,7 +22,8 @@
   function updateMessage() {
     const st = status.get(state.focusId);
     BTC.ui.hud.setMessage(st === 'loading' ? 'Chargement du bloc…'
-      : st === 'error' ? 'Chargement du bloc impossible pour le moment, nouvel essai…' : '');
+      : st === 'error' ? 'Chargement du bloc impossible pour le moment, nouvel essai…'
+        : st === 'failed' ? 'Chargement du bloc impossible. Cliquez sur le bloc pour réessayer.' : '');
   }
 
   function forget(id) { cache.delete(id); status.delete(id); }
@@ -40,8 +42,10 @@
     return BTC.txs.provisional(await BTC.api.blockTxids(b.id), b.extras?.medianFee);
   }
 
+  /** Schedules a new attempt. Returns false when none is possible (already planned counts as true; retries exhausted is false). */
   function scheduleRetry(b) {
-    if (retryTimers.has(b.id) || (retryCount.get(b.id) || 0) >= S.maxRetry) return;
+    if (retryTimers.has(b.id)) return true;
+    if ((retryCount.get(b.id) || 0) >= S.maxRetry) return false;
     retryTimers.set(b.id, setTimeout(() => {
       retryTimers.delete(b.id);
       retryCount.set(b.id, (retryCount.get(b.id) || 0) + 1);
@@ -49,6 +53,7 @@
       cache.delete(b.id);
       load(b);
     }, S.retryMs));
+    return true;
   }
 
   /** Loads the transactions of a block into its slot. */
@@ -62,22 +67,31 @@
       const txs = await cache.get(b.id);
       if (!wantsDetail(b)) { forget(b.id); return; } // demoted/removed while loading: don't rebuild the detail
       scene.setTxs(b.id, txs);
+      light.delete(b.id);
       status.delete(b.id);
       updateMessage();
       if (txs.approx) scheduleRetry(b); else retryCount.delete(b.id);
     } catch (e) {
       console.warn('bloc', b.height, e);
       cache.delete(b.id);
-      if (wantsDetail(b)) { status.set(b.id, 'error'); scheduleRetry(b); } else status.delete(b.id); // network failure / rate limit: retry later
+      // network failure / rate limit: retry later, then give up (a click on the block tries again)
+      if (wantsDetail(b)) status.set(b.id, scheduleRetry(b) ? 'error' : 'failed'); else status.delete(b.id);
       updateMessage();
     }
   }
 
   /** Old block of the window: no download, a light shape (also frees the memory of its detail). */
   function demote(b) {
+    if (light.has(b.id)) return; // already a light shape: nothing to rebuild
     forget(b.id);
     scene.setTxs(b.id, null);
     scene.setSummary(b.id, { fill: BTC.blocks.fillPercent(b) / 100, rate: b.extras?.medianFee });
+    light.add(b.id);
+  }
+
+  /** Detailed blocks (the recent ones of the window, and the selected one) are loaded; the others become light shapes. */
+  function applyDetail() {
+    windowBlocks().forEach((b, i) => { if (i < S.detail || b.id === state.focusId) load(b); else demote(b); });
   }
 
   /** Makes the scene match the state: slots, links, detailed vs light blocks, and the projected block if it is shown. */
@@ -87,18 +101,18 @@
       ...(showsNext() ? [{ id: S.nextId, kind: 'next', label: 'PROCHAIN' }] : []),
       ...shown.map((b) => ({ id: b.id, kind: 'mined', label: `#${BTC.format.number(b.height)}` })),
     ]);
-    for (const id of [...cache.keys()]) if (!shown.some((b) => b.id === id)) forget(id);
-    shown.forEach((b, i) => { if (i < S.detail || b.id === state.focusId) load(b); else demote(b); });
+    for (const id of [...cache.keys(), ...light]) if (!shown.some((b) => b.id === id)) { forget(id); light.delete(id); }
+    applyDetail();
     // the next block slot may have just been (re)created, empty: give it the projection we already know
     if (showsNext() && scene.txCount(S.nextId) === 0 && projection.hasData()) publishNow();
     updateMessage();
   }
 
-  /** The camera moves to a slot: a light block gets its detail loaded. */
+  /** The camera moves to a slot: a light block gets its detail loaded, and the block it left may go back to a light shape. */
   function focus(id) {
     scene.focus(id);
-    const b = state.blocks.find((x) => x.id === id);
-    if (b && !cache.has(id)) load(b);
+    if (status.get(id) === 'failed') { status.delete(id); retryCount.delete(id); } // clicking a block that gave up tries again
+    applyDetail();
     updateMessage();
   }
 

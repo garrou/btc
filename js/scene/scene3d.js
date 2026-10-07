@@ -17,6 +17,7 @@
   const FLIGHT = 1.2;       // fall duration (s)
   const POP = 0.35;         // tower pop duration on landing (s)
   const FLASH = 0.7;        // white flash duration (s)
+  const HOVER_WHITE = 2.4;  // color value of the hovered tower (> 1: glows with the bloom)
   const THEME = { mined: BTC.colors.MINED_BLOCK_HEX, next: BTC.colors.NEXT_BLOCK_HEX };
 
   function create(container, opts = {}) {
@@ -328,8 +329,18 @@
         col.needsUpdate = true;
       }
       hover = h;
-      if (h) { const col = h.slot.mesh.instanceColor; col.array.set([2.4, 2.4, 2.4], h.id * 3); col.needsUpdate = true; }
+      paintHover();
       canvas.style.cursor = h ? 'pointer' : 'grab';
+    }
+
+    // The highlight lives in the same color buffer as the arrival flash and the rebuilds: repaint it after them every
+    // frame (only writes when something overwrote it), so the highlight never disagrees with the 'pointer' cursor.
+    function paintHover() {
+      if (!hover || !hover.slot.mesh) return;
+      const col = hover.slot.mesh.instanceColor, i = hover.id * 3;
+      if (col.array[i] === HOVER_WHITE && col.array[i + 1] === HOVER_WHITE && col.array[i + 2] === HOVER_WHITE) return;
+      col.array.set([HOVER_WHITE, HOVER_WHITE, HOVER_WHITE], i);
+      col.needsUpdate = true;
     }
     function hideTip() { if (opts.tooltip) opts.tooltip.hidden = true; }
 
@@ -341,8 +352,8 @@
       for (const slot of slots.values()) {
         if (!slot.mesh) continue;
         // pre-test on the cage: avoids testing thousands of instances for blocks outside the ray
-        const x = slot.group.position.x;
-        box.min.set(x - SIZE / 2, 0, -SIZE / 2); box.max.set(x + SIZE / 2, FRAME_H, SIZE / 2);
+        const { x, y } = slot.group.position; // the group falls into place when created: follow it
+        box.min.set(x - SIZE / 2, y, -SIZE / 2); box.max.set(x + SIZE / 2, y + FRAME_H, SIZE / 2);
         if (!ray.ray.intersectsBox(box)) continue;
         slot.group.updateMatrixWorld(true);
         const hit = ray.intersectObject(slot.mesh)[0];
@@ -477,6 +488,7 @@
           s.glass.material.opacity = 0.035 + 0.1 * s.pulse;
         }
       }
+      paintHover();
       updateLinks(dt, now / 1000);
       // the camera follows the selected block, translation only (the user-chosen angle is kept)
       const f = slots.get(focusId);
@@ -508,7 +520,8 @@
       setTxs(id, txs, incoming) {
         const s = slots.get(id);
         if (!s || s.txs === txs) return;
-        const first = !s.txs || s.txs.approx; // provisional -> real data: the growth restarts
+        // growth animation on the first fill, and when provisional data is replaced by the real one (not on a provisional refresh)
+        const first = !s.txs || (s.txs.approx && !txs?.approx);
         s.txs = txs;
         buildMesh(s, first, incoming);
       },
@@ -521,8 +534,11 @@
       setSummary(id, { fill, rate }) {
         const s = slots.get(id);
         if (!s || s.mesh) return;
-        disposeLite(s);
         const h = Math.max(0.8, Math.min(1, fill) * (FRAME_H - 2));
+        const key = `${h.toFixed(3)}|${rate ?? ''}`;
+        if (s.lite && s.liteKey === key) return; // already showing this shape
+        disposeLite(s);
+        s.liteKey = key;
         const m = new THREE.Mesh(unitBox, new THREE.MeshStandardMaterial({ color: colorOf(BTC.colors.rate(rate ?? 2)), metalness: 0.35, roughness: 0.5, transparent: true, opacity: 0.85 }));
         m.scale.set(SIZE - 3, h, SIZE - 3);
         s.group.add(m); s.lite = m;

@@ -14,6 +14,10 @@
     let x = 0, y = 0, w = W, h = H, i = 0;
     while (i < vals.length) {
       const side = Math.min(w, h);
+      if (!(side > 1e-9)) { // no free area left (full block, rounding): the remaining items get empty rects instead of NaN/Infinity
+        for (let m = i; m < vals.length; m++) out[m] = { x, y, w: 0, h: 0 };
+        break;
+      }
       let sum = 0, mx = 0, mn = Infinity, prev = Infinity, j = i;
       for (; j < vals.length; j++) {
         const a = vals[j] * k, s2 = sum + a, nmx = Math.max(mx, a), nmn = Math.min(mn, a);

@@ -10,6 +10,7 @@
   const ui = () => BTC.ui;
   const sync = () => BTC.sceneSync;
   let loadingOlder = false;
+  let liveRequest = 0; // identifies the latest "back to live" request: a newer navigation cancels an older one still loading
 
   // ----- views -----
 
@@ -41,10 +42,10 @@
   /** Moves the camera to a slot ('next' or a block id). A manual choice (auto = false) turns "follow" off. */
   function focus(id, auto = false) {
     if (!sync().active()) return;
-    if (!auto) setFollow(false);
+    if (!auto) { setFollow(false); liveRequest++; } // a manual choice also cancels a pending "back to live"
+    if (id === S.nextId && (state.sceneOffset > 0 || state.detached)) { showLive(S.nextId); return; }
     state.focusId = id;
     state.selectedId = id === S.nextId ? null : id;
-    if (id === S.nextId && (state.sceneOffset > 0 || state.detached)) { showLive(S.nextId); return; }
     // move the 3D window when the block is outside of it (history)
     const offset = BTC.blocks.ensureVisible(state.blocks, id, state.sceneOffset, S.shown);
     if (offset !== state.sceneOffset) { state.sceneOffset = offset; sync().sync(); }
@@ -54,16 +55,27 @@
   }
 
   /**
-   * Back to the live window (latest blocks + next block). Coming back from a searched block (detached list)
-   * reloads the latest blocks first. thenFocus: slot to select afterwards (default: the latest block).
+   * Back to the live window (latest blocks + next block). Coming back from a searched block (detached list) fetches the
+   * latest blocks first, and the current view stays untouched (and usable) until they are here; if the request fails,
+   * we stay where we are. thenFocus: slot to select afterwards (default: the latest block).
    */
   async function showLive(thenFocus = null) {
+    const request = ++liveRequest;
     if (state.detached) {
+      let list;
+      try { list = await BTC.api.blocks(); } catch (e) {
+        console.warn('blocks', e);
+        setFollow(false);
+        ui().hud.setMessage('Impossible de recharger les derniers blocs, réessayez.');
+        return;
+      }
+      if (request !== liveRequest || !state.detached) return; // cancelled by a newer navigation
       state.detached = false;
-      state.blocks = [];
+      state.tip = Math.max(state.tip, BTC.blocks.tipOf(list));
+      state.blocks = BTC.blocks.merge([], list);
       state.sceneOffset = 0;
       renderRow();
-      try { await refreshBlocks(); } catch (e) { console.warn('blocks', e); loadBlocks(1); return; }
+      sync().sync();
     } else {
       state.sceneOffset = 0;
       sync().sync();
@@ -158,7 +170,11 @@
    */
   async function goToBlock(query, token) {
     const details = BTC.details;
-    if (!sync().active()) return details.openBlock(query.hash ?? await BTC.api.blockHash(query.height));
+    if (!sync().active()) { // no 3D: open the details, after checking the block exists (a 404 lets the search try a tx instead)
+      const hash = query.hash ?? await BTC.api.blockHash(query.height);
+      await BTC.api.blockBasic(hash);
+      return details.openBlock(hash);
+    }
     const height = query.height ?? (await BTC.api.blockBasic(query.hash)).height;
     if (!details.isCurrent(token)) return;
     if (state.tip && height > state.tip) throw new Error('hauteur au-delà du dernier bloc');

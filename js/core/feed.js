@@ -4,7 +4,7 @@
   const BTC = (window.BTC = window.BTC || {});
 
   function create(cfg = BTC.config.feed) {
-    let seen = new Set();
+    const seen = new Set();
     const buffer = [];   // arrivals waiting to be displayed (oldest first)
     const stamps = [];   // arrival times (ms), for the tx/s rate
     let total = 0;
