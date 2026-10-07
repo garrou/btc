@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BTC Explorer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>₿ BTC Explorer</h1>
+    <form id="search" autocomplete="off">
+      <input id="q" type="search" placeholder="Hauteur, hash de bloc ou txid" aria-label="Recherche">
+      <button type="submit">Chercher</button>
+    </form>
+    <span id="status" class="pill off">hors ligne</span>
+  </header>
+
+  <main>
+    <section class="stage">
+      <div class="hud hud-top">
+        <div class="hud-title"><b id="hud-title">Bloc</b> <span id="hud-sub" class="muted"></span></div>
+        <div class="hud-actions">
+          <label><input type="checkbox" id="follow" checked> Suivre le dernier bloc</label>
+          <label><input type="checkbox" id="rotate" checked> Rotation</label>
+          <button id="hud-details" type="button">Détails du bloc</button>
+        </div>
+      </div>
+      <div id="scene">
+        <div id="tip3d" class="tooltip" hidden></div>
+        <div id="scene-msg" class="scene-msg"></div>
+      </div>
+      <div class="hud hud-bottom">
+        <div class="legend">
+          <span>1</span><i></i><span>300+ sat/vB</span>
+        </div>
+        <small class="muted">surface = taille · hauteur &amp; couleur = frais · clic = détail de la tx</small>
+      </div>
+    </section>
+
+    <section>
+      <h2>Blocs <small>prochain bloc (projection du mempool) → minés · clic = aller à ce bloc en 3D, double-clic = détails</small></h2>
+      <div class="chain-wrap">
+        <button type="button" class="nav nav-prev" aria-label="Blocs plus récents"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="chain">
+          <div id="upcoming" class="row"></div>
+          <div class="tip" title="Dernier bloc miné"></div>
+          <div id="blocks" class="row"></div>
+        </div>
+        <button type="button" class="nav nav-next" aria-label="Blocs plus anciens"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="feed-head">Transactions récentes <small id="txcount"></small>
+        <label class="pause"><input type="checkbox" id="pause"> Pause</label></h2>
+      <ul id="txs" class="txs js-scroll"></ul>
+    </section>
+  </main>
+
+  <dialog id="detail">
+    <button id="close" aria-label="Fermer">✕</button>
+    <div id="detail-body" class="js-scroll"></div>
+  </dialog>
+
+  <!-- Three.js r147 en scripts classiques : fonctionne en double-clic (file://) comme sur un hébergeur statique -->
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/MaskPass.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <script defer src="block3d.js"></script>
+  <script defer src="ui.js"></script>
+  <script defer src="app.js"></script>
+</body>
+</html>
