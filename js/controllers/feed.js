@@ -22,10 +22,13 @@
     if (batch.length) BTC.ui.feed.prepend(batch);
   }
 
+  let polling = false;
   async function poll() {
+    if (polling) return; // a slow API must not pile up requests
+    polling = true;
     try {
       ingest((await BTC.api.recent()).slice().reverse()); // oldest first: the newest ends on top
-    } catch (e) { console.warn('recent', e); }
+    } catch (e) { console.warn('recent', e); } finally { polling = false; }
   }
 
   BTC.feedCtl = { ingest, flush, poll };

@@ -101,7 +101,9 @@
       ...(showsNext() ? [{ id: S.nextId, kind: 'next', label: 'PROCHAIN' }] : []),
       ...shown.map((b) => ({ id: b.id, kind: 'mined', label: `#${BTC.format.number(b.height)}` })),
     ]);
-    for (const id of [...cache.keys(), ...light]) if (!shown.some((b) => b.id === id)) { forget(id); light.delete(id); }
+    for (const id of [...cache.keys(), ...light, ...retryCount.keys()]) {
+      if (!shown.some((b) => b.id === id)) { forget(id); light.delete(id); retryCount.delete(id); }
+    }
     applyDetail();
     // the next block slot may have just been (re)created, empty: give it the projection we already know
     if (showsNext() && scene.txCount(S.nextId) === 0 && projection.hasData()) publishNow();

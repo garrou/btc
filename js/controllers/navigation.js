@@ -144,22 +144,22 @@
     const oldest = state.blocks.at(-1);
     if (loadingOlder || !oldest || oldest.height <= 0) return;
     loadingOlder = true;
+    let failed = false;
     ui().blocksRow.setMore({ disabled: true, title: 'Chargement…', sub: ' ' });
     try {
       const list = await BTC.api.blocksFrom(oldest.height - 1); // 15 blocks, newest first, starting at that height
       if (!Array.isArray(list) || !list.length) throw new Error('no blocks');
       if (state.blocks.at(-1)?.id !== oldest.id) return; // the list was replaced meanwhile (search, back to live): drop this page
       state.blocks = BTC.blocks.merge(state.blocks, list);
-      loadingOlder = false;
       renderRow();
       ui().blocksRow.reveal(list[0].id);
     } catch (e) {
       console.warn('older blocks', e);
-      loadingOlder = false;
-      ui().blocksRow.setMore({ title: 'Réessayer', sub: 'chargement impossible' });
+      failed = true;
     } finally {
       loadingOlder = false;
-      updateMoreButton();
+      if (failed) ui().blocksRow.setMore({ title: 'Réessayer', sub: 'chargement impossible' });
+      else updateMoreButton();
     }
   }
 
