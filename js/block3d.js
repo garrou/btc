@@ -9,6 +9,10 @@
   const PITCH = 60;         // distance between two blocks
   const FRAME_H = 16;       // height of the cage
   const COINBASE_SIDE = 3;  // side of the coinbase pillar
+  // Layout order of the towers (selectable in the UI): 'txid' = by transaction id (neutral: unrelated to size and fee,
+  // stable when txs come and go), 'api' = the order given by mempool.space (already sorted by fee rate),
+  // 'size' = largest first (squarer shapes, reshuffles on every change)
+  const ORDERS = ['txid', 'api', 'size'];
   const BLOCK_VSIZE = 1e6;  // block capacity (vB): reference for the footprint scale
   const GROW = 0.7;         // tower growth duration (s)
   const STAGGER = 0.9;      // spread of the start times (s)
@@ -85,7 +89,6 @@
     controls.maxPolarAngle = Math.PI * 0.49;
     controls.minDistance = 20;
     controls.maxDistance = 170;
-    controls.autoRotateSpeed = 0.7;
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     const sun = new THREE.DirectionalLight(0xfff1dd, 1.1); sun.position.set(30, 60, 20); scene.add(sun);
@@ -298,6 +301,8 @@
       s.arrivals = s.arrivals.filter((a) => !(a.landed && a.popT > FLASH));
     }
 
+    let layoutOrder = 'txid';
+
     function buildMesh(slot, animate, incoming) {
       // In-flight arrival particles survive a rebuild (re-anchored by txid below); everything else is reset.
       const carried = animate ? [] : slot.arrivals.filter((a) => !a.landed);
@@ -312,7 +317,9 @@
       // The coinbase is a fixed-size square pillar in a corner; the other txs share the rest of the platform.
       // Scale: a full block (~1 Mvb) fills everything, an almost empty block leaves most of it free (otherwise a
       // lone coinbase, or 2-3 big txs, would become a giant block). Provisional data (vsize=1): the whole platform.
-      const cb = txs.filter((x) => x.coinbase), rest = txs.filter((x) => !x.coinbase).sort((a, b) => b.vsize - a.vsize);
+      const cb = txs.filter((x) => x.coinbase), rest = txs.filter((x) => !x.coinbase);
+      if (layoutOrder === 'size') rest.sort((a, b) => b.vsize - a.vsize);
+      else if (layoutOrder === 'txid') rest.sort((a, b) => (a.txid < b.txid ? -1 : a.txid > b.txid ? 1 : 0));
       const lane = cb.length ? COINBASE_SIDE : 0;
       const sum = rest.reduce((s, x) => s + Math.max(1, x.vsize), 0);
       const laid = rest.length ? treemap(rest.map((x) => Math.max(1, x.vsize)), SIZE, SIZE - lane, txs.approx ? sum : BLOCK_VSIZE) : [];
@@ -369,7 +376,7 @@
 
     // ----- interaction -----
     const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), box = new THREE.Box3();
-    let hover = null, pending = null, down = null, inside = false, auto = true, visible = true;
+    let hover = null, pending = null, down = null, visible = true;
 
     function setHover(h) {
       if ((hover && h && hover.slot === h.slot && hover.id === h.id) || (!hover && !h)) return;
@@ -410,8 +417,7 @@
       } else hideTip();
     }
 
-    canvas.addEventListener('pointerenter', () => { inside = true; });
-    canvas.addEventListener('pointerleave', () => { inside = false; pending = null; hideTip(); setHover(null); });
+    canvas.addEventListener('pointerleave', () => { pending = null; hideTip(); setHover(null); });
     canvas.addEventListener('pointermove', (e) => { pending = e; });
     canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
     canvas.addEventListener('pointerup', (e) => {
@@ -538,7 +544,6 @@
         snapped = true;
       }
       if (pending) { pick(pending); pending = null; }
-      controls.autoRotate = auto && !inside; // freeze the rotation while hovering
       controls.update();
       composer ? composer.render() : renderer.render(scene, camera);
     })(last);
@@ -571,7 +576,12 @@
         s.group.add(m); s.lite = m;
       },
       focus(id) { focusId = id; },
-      setAutoRotate(v) { auto = !!v; },
+      // Change the layout order: every displayed block is re-laid out, towers glide to their new place.
+      setOrder(mode) {
+        if (!ORDERS.includes(mode) || mode === layoutOrder) return;
+        layoutOrder = mode;
+        for (const s of slots.values()) if (s.txs && s.mesh) buildMesh(s, false, null);
+      },
     };
   }
 

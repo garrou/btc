@@ -1126,3 +1126,16 @@ dialog::backdrop {
   color: var(--muted);
   font-style: italic;
 }
+/* load older blocks */
+.block.more { display: grid; place-content: center; text-align: center; border-style: dashed; color: var(--muted); }
+.block.more:hover { color: var(--text); }
+.block.more:disabled { opacity: .6; cursor: progress; }
+
+/* layout order selector */
+.hud-actions select { pointer-events: auto; font: inherit; font-size: .85rem; color: inherit; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: .25rem .4rem; cursor: pointer; }
+.hud-actions select:hover { border-color: var(--accent); }
+
+/* the dialog itself takes the initial focus (no ring on the close button); keyboard focus still shows a single ring */
+dialog:focus { outline: none; }
+button:focus-visible:hover { border-color: var(--line); } /* one orange contour at a time: the focus ring, not ring + hover border */

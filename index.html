@@ -24,9 +24,6 @@
         <span class="k">Hashrate</span>
         <b id="st-hash">—</b>
         <small id="st-hash-sub">moyenne sur 3 jours</small>
-        <svg id="st-spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">
-          <polyline points="" />
-        </svg>
       </div>
       <div class="stat">
         <span class="k">Difficulté</span>
@@ -51,7 +48,13 @@
         <div class="hud-title"><b id="hud-title">Bloc</b> <span id="hud-sub" class="muted"></span></div>
         <div class="hud-actions">
           <label><input type="checkbox" id="follow" checked> Suivre le dernier bloc</label>
-          <label><input type="checkbox" id="rotate" checked> Rotation</label>
+          <label>Ordre
+            <select id="order" aria-label="Ordre des tours">
+              <option value="txid">Identifiant</option>
+              <option value="api">Frais (ordre du bloc)</option>
+              <option value="size">Taille</option>
+            </select>
+          </label>
           <button id="hud-details" type="button">Détails du bloc</button>
         </div>
       </div>
@@ -97,6 +100,7 @@
           <div id="upcoming" class="row"></div>
           <div class="tip" title="Dernier bloc miné"></div>
           <div id="blocks" class="row"></div>
+          <button type="button" id="more-blocks" class="block more" hidden></button>
         </div>
         <button type="button" class="nav nav-next" aria-label="Blocs plus anciens"><svg viewBox="0 0 24 24" width="20"
             height="20" aria-hidden="true">
@@ -114,7 +118,7 @@
     </section>
   </main>
 
-  <dialog id="detail">
+  <dialog id="detail" tabindex="-1">
     <button id="close" aria-label="Fermer">✕</button>
     <div id="detail-body" class="js-scroll"></div>
   </dialog>
@@ -131,7 +135,6 @@
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
   <script defer src="js/block3d.js"></script>
-  <script defer src="js/miners.js"></script>
   <script defer src="js/ui.js"></script>
   <script defer src="js/app.js"></script>
 </body>

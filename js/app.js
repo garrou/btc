@@ -1,6 +1,5 @@
 const API = 'https://mempool.space/api';
 const WS_URL = 'wss://mempool.space/api/v1/ws';
-const MAX_BLOCKS = 12;
 const MAX_TXS = 200;       // rows kept in the feed
 const POLL_MS = 1000;      // /mempool/recent only returns ~10 txs: poll it often so none are missed
 const FLUSH_MS = 300;      // feed render interval (batches arrivals)
@@ -19,6 +18,7 @@ function el(tag, props = {}, ...kids) {
 }
 
 const nf = new Intl.NumberFormat('fr-FR');
+const blockFill = (b) => (b.weight || 0) / 4e4; // % of the 4 MWU block capacity
 const short = (s, a = 10, b = 8) => (s.length > a + b + 1 ? `${s.slice(0, a)}…${s.slice(-b)}` : s);
 const btc = (sats) => (sats / 1e8).toFixed(8).replace(/\.?0+$/, '') + ' BTC';
 const date = (ts) => new Date(ts * 1000).toLocaleString('fr-FR');
@@ -37,7 +37,7 @@ async function api(path) {
   return type.includes('json') ? res.json() : res.text();
 }
 
-const state = { blocks: [], upcoming: [], txs: [], seen: new Set(), selectedId: null, focusId: null };
+const state = { detached: false, tip: 0, seeded: false, sceneOffset: 0, blocks: [], upcoming: [], txs: [], seen: new Set(), selectedId: null, focusId: null };
 
 function blockCard(b, fresh) {
   return el('button', {
@@ -68,6 +68,7 @@ function upcomingCard(m, i) {
 
 function renderBlocks(freshId) {
   $('#blocks').replaceChildren(...state.blocks.map((b) => blockCard(b, b.id === freshId)));
+  updateMoreLabel();
 }
 function renderUpcoming() {
   $('#upcoming').replaceChildren(...state.upcoming.slice(0, 1).map(upcomingCard)); // stop at the next block
@@ -75,8 +76,13 @@ function renderUpcoming() {
 }
 
 function addBlock(b) {
+  state.tip = Math.max(state.tip, b.height);
+  // browsing a block found by search: the live list is reloaded when coming back, nothing to update here
+  if (state.detached) { miners?.found(minerInfo(b)); return; }
   if (state.blocks.some((x) => x.id === b.id)) return;
-  state.blocks = [b, ...state.blocks].sort((x, y) => y.height - x.height).slice(0, MAX_BLOCKS);
+  state.blocks = [b, ...state.blocks].sort((x, y) => y.height - x.height);
+  // live follow: back to the latest blocks; otherwise keep the same history window (indexes shifted by the new block)
+  if ($('#follow').checked) state.sceneOffset = 0; else if (state.sceneOffset > 0) state.sceneOffset++;
   renderBlocks(b.id);
   miners?.found(minerInfo(b));
   if (Date.now() - lastStats > 15000) refreshStats(); // a new block moves the retarget progress
@@ -106,7 +112,13 @@ try {
 } catch (e) { console.warn('3D scene unavailable (no WebGL?)', e); scene3d = null; }
 if (!scene3d) stage.hidden = true; // Three.js not loaded (offline / CDN blocked)
 else {
-  $('#rotate').addEventListener('change', (e) => scene3d.setAutoRotate(e.target.checked));
+  const orderSel = $('#order');
+  try { const saved = localStorage.getItem('layoutOrder'); if (saved && [...orderSel.options].some((o) => o.value === saved)) orderSel.value = saved; } catch { /* storage unavailable */ }
+  scene3d.setOrder(orderSel.value);
+  orderSel.addEventListener('change', () => {
+    scene3d.setOrder(orderSel.value);
+    try { localStorage.setItem('layoutOrder', orderSel.value); } catch { /* storage unavailable */ }
+  });
   $('#hud-details').addEventListener('click', () => state.selectedId && openBlock(state.selectedId));
 }
 
@@ -138,10 +150,12 @@ async function loadBlockTxs(b) {
 const txCache = new Map();
 const RETRY_MS = 8000, MAX_RETRY = 8;   // retry while the block only has provisional data
 const retryTimers = new Map(), retryCount = new Map();
+// The mined blocks shown in the 3D scene: a window over the loaded history (offset 0 = the latest blocks)
+const sceneBlocks = () => state.blocks.slice(state.sceneOffset, state.sceneOffset + SHOWN);
 // Does the 3D scene currently want the full detail of this block? (recent, or selected)
 function wantsDetail(b) {
-  const i = state.blocks.findIndex((x) => x.id === b.id);
-  return i >= 0 && i < SHOWN && (i < DETAIL || b.id === state.focusId);
+  const i = sceneBlocks().findIndex((x) => x.id === b.id);
+  return i >= 0 && (i < DETAIL || b.id === state.focusId);
 }
 function scheduleRetry(b) {
   if (retryTimers.has(b.id) || (retryCount.get(b.id) || 0) >= MAX_RETRY) return;
@@ -170,9 +184,9 @@ async function loadSlot(b) {
 }
 
 function syncScene() {
-  const shown = state.blocks.slice(0, SHOWN);
+  const shown = sceneBlocks();
   scene3d.setSlots([
-    { id: NEXT_ID, kind: 'next', label: 'PROCHAIN' },
+    ...(state.sceneOffset === 0 && !state.detached ? [{ id: NEXT_ID, kind: 'next', label: 'PROCHAIN' }] : []), // the next block only makes sense next to the latest one
     ...shown.map((b) => ({ id: b.id, kind: 'mined', label: `#${nf.format(b.height)}` })),
   ]);
   for (const id of [...txCache.keys()]) if (!shown.some((b) => b.id === id)) txCache.delete(id);
@@ -232,9 +246,27 @@ function updateHud() {
     const b = state.blocks.find((x) => x.id === id);
     if (!b) return;
     $('#hud-title').textContent = `Bloc #${nf.format(b.height)}`;
-    $('#hud-sub').textContent = `${nf.format(b.tx_count)} tx · ${b.extras?.pool?.name ?? 'mineur inconnu'} · ${date(b.timestamp)}`;
+    $('#hud-sub').textContent = `${nf.format(b.tx_count)} tx · ${fr(blockFill(b))} % plein · ${b.extras?.pool?.name ?? 'mineur inconnu'} · ${date(b.timestamp)}`;
   }
   $('#hud-details').hidden = id === NEXT_ID;
+}
+
+// Back to the live window (latest blocks + next block), restoring the projected block that was not displayed meanwhile.
+// Coming back from a searched block (detached list) reloads the latest blocks first. thenFocus: slot to select afterwards.
+async function showLive(thenFocus = null) {
+  if (state.detached) {
+    state.detached = false;
+    state.blocks = [];
+    state.sceneOffset = 0;
+    renderBlocks();
+    try { await refreshBlocks(); } catch (e) { console.warn('blocks', e); loadBlocks(1); return; }
+  } else {
+    state.sceneOffset = 0;
+    syncScene();
+  }
+  if (proj && proj.size) { clearTimeout(projTimer); projTimer = 0; pushProjected(); }
+  const target = thenFocus ?? state.blocks[0]?.id;
+  if (target) focusSlot(target, true);
 }
 
 function focusSlot(id, auto = false) {
@@ -242,6 +274,10 @@ function focusSlot(id, auto = false) {
   if (!auto) $('#follow').checked = false; // a manual choice turns following off
   state.focusId = id;
   state.selectedId = id === NEXT_ID ? null : id;
+  // move the 3D window when the target block is outside it (history), or back to the live view for the next block
+  const idx = state.blocks.findIndex((b) => b.id === id);
+  if (id === NEXT_ID && (state.sceneOffset > 0 || state.detached)) { showLive(NEXT_ID); return; }
+  else if (idx >= 0 && (idx < state.sceneOffset || idx >= state.sceneOffset + SHOWN)) { state.sceneOffset = Math.max(0, idx - 2); syncScene(); }
   scene3d.focus(id);
   const fb = state.blocks.find((x) => x.id === id);
   if (fb && !txCache.has(id)) { setSceneMsg('Chargement du bloc…'); loadSlot(fb); } // simplified old block: load its detail
@@ -351,7 +387,10 @@ dialog.addEventListener('click', (e) => { // close on backdrop click only (not o
 
 function show(...nodes) {
   body.replaceChildren(...nodes.flat()); // flatten arrays (e.g. a list of transactions)
-  if (!dialog.open) dialog.showModal();
+  if (!dialog.open) {
+    dialog.showModal();
+    dialog.focus(); // showModal() focuses the close button, which then shows a focus ring on top of its hover border
+  }
 }
 
 const fields = (rows) => el('dl', {}, rows.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
@@ -408,32 +447,61 @@ async function openBlock(hash) {
   const mine = ++detailSeq;
   show(el('p', { class: 'muted' }, 'Chargement…'));
   try {
-    const [b, txs] = await Promise.all([api(`/block/${hash}`), api(`/block/${hash}/txs`)]);
+    // /v1/block carries the mining "extras" (pool, median fee, total fees) that /block lacks; fall back to what the list already knows
+    const [b0, txs] = await Promise.all([api(`/v1/block/${hash}`).catch(() => api(`/block/${hash}`)), api(`/block/${hash}/txs`)]);
     if (mine !== detailSeq) return;
+    const b = { ...b0, extras: b0.extras ?? state.blocks.find((x) => x.id === hash)?.extras };
     show(el('h2', {}, `Bloc #${nf.format(b.height)}`), fields([
       ['Hash', el('span', { class: 'mono' }, b.id)],
       ['Date', `${date(b.timestamp)} (${ago(b.timestamp)})`],
       ['Transactions', nf.format(b.tx_count)],
       ['Taille', `${(b.size / 1e6).toFixed(2)} Mo · ${(b.weight / 1e6).toFixed(2)} MWU`],
+      ['Remplissage', `${fr(blockFill(b))} % de la capacité (4 MWU)`],
       ['Mineur', b.extras?.pool?.name ?? '—'],
-      ['Frais médian', b.extras ? `${b.extras.medianFee.toFixed(1)} sat/vB` : '—'],
+      ['Frais médian', b.extras?.medianFee != null ? `${b.extras.medianFee.toFixed(1)} sat/vB` : '—'],
+      ...(b.extras?.totalFees != null ? [['Frais totaux', btc(b.extras.totalFees)]] : []),
       ...(b.previousblockhash ? [['Bloc précédent', el('button', { class: 'link mono', onclick: () => openBlock(b.previousblockhash) }, short(b.previousblockhash, 16, 8))]] : []), // absent for the genesis block
     ]), el('h3', {}, `Premières transactions (${txs.length} / ${nf.format(b.tx_count)})`), txs.map((t) => txCard(t)));
   } catch (e) { if (mine === detailSeq) show(el('p', {}, `Bloc introuvable (${e.message})`)); }
 }
 
 // ---------- search ----------
+// Show a block (by hash or height) in the 3D scene; its details stay one click away ("Détails du bloc").
+// A block outside the loaded history replaces the list by the blocks around it ("detached" from the live list).
+async function goToBlock(hash, height = null) {
+  if (!scene3d) return openBlock(hash ?? await api(`/block-height/${height}`));
+  const mine = ++detailSeq; // a newer search/detail request wins
+  if (height == null) height = (await api(`/block/${hash}`)).height;
+  if (height > state.tip && state.tip) throw new Error('hauteur au-delà du dernier bloc');
+  let target = state.blocks.find((b) => b.height === height);
+  if (!target) {
+    const list = await api(`/v1/blocks/${Math.min(height + 2, state.tip || height + 2)}`); // 15 blocks, newest first: 2 newer + the target + older
+    target = list.find((b) => b.height === height);
+    if (!target) throw new Error('bloc introuvable');
+    if (mine !== detailSeq) return;
+    state.detached = true;
+    state.blocks = list;
+    state.sceneOffset = 0;
+    renderBlocks();
+    syncScene();
+  }
+  if (mine !== detailSeq) return;
+  dialog.open && dialog.close();
+  focusSlot(target.id); // manual choice: turns "follow" off and moves the 3D window if needed
+}
+
+
 $('#search').addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = $('#q').value.trim();
   if (!q) return;
   try {
-    if (/^\d+$/.test(q)) return openBlock(await api(`/block-height/${q}`));
+    if (/^\d+$/.test(q)) return await goToBlock(null, Number(q));
     if (/^[0-9a-fA-F]{64}$/.test(q)) {
       // a block hash starts with many zeros
       const blockFirst = q.startsWith('00000000');
-      const [a, b] = blockFirst ? [openBlock, openTx] : [openTx, openBlock];
-      try { await api(blockFirst ? `/block/${q}` : `/tx/${q}`); return a(q); } catch { return b(q); }
+      const [a, b] = blockFirst ? [goToBlock, openTx] : [openTx, goToBlock];
+      try { await api(blockFirst ? `/block/${q}` : `/tx/${q}`); return await a(q); } catch { return await b(q); }
     }
     show(el('p', {}, 'Entrée non reconnue : hauteur, hash de bloc (64 hex) ou txid.'));
   } catch (err) { show(el('p', {}, `Introuvable (${err.message})`)); }
@@ -469,10 +537,6 @@ async function refreshStats() {
       $('#st-power-box').title = `Estimation : hashrate × ${J_PER_TH} J/TH (efficacité moyenne supposée du parc de machines).`;
     }
     if (difficulty) setStat('st-diff', `${fr(difficulty / 1e12, 2)}<em>T</em>`);
-    if (series.length > 1) {
-      const lo = Math.min(...series), hi = Math.max(...series), span = hi - lo || 1;
-      $('#st-spark polyline').setAttribute('points', series.map((v, i) => `${(i / (series.length - 1)) * 100},${22 - ((v - lo) / span) * 20}`).join(' '));
-    }
   } else console.warn('hashrate', hr.reason);
   if (adj.status === 'fulfilled') {
     const a = adj.value, change = num(a.difficultyChange), pct = num(a.progressPercent);
@@ -509,17 +573,55 @@ async function refreshPools() {
   }
 }
 
+// ---------- history: load older blocks ----------
+const moreBtn = $('#more-blocks');
+let loadingOlder = false;
+function setMoreLabel(title, sub) { moreBtn.replaceChildren(el('b', {}, title), el('span', {}, sub)); }
+function updateMoreLabel() {
+  if (loadingOlder) return;
+  const oldest = state.blocks.at(-1);
+  moreBtn.hidden = !oldest || oldest.height <= 0; // nothing older than the genesis block
+  if (oldest) setMoreLabel('+ Plus ancien', `avant #${nf.format(oldest.height)}`);
+}
+async function loadOlder() {
+  const oldest = state.blocks.at(-1);
+  if (loadingOlder || !oldest || oldest.height <= 0) return;
+  loadingOlder = true; moreBtn.disabled = true; setMoreLabel('Chargement…', ' ');
+  try {
+    const list = await api(`/v1/blocks/${oldest.height - 1}`); // 15 blocks, newest first, starting at that height
+    if (!Array.isArray(list) || !list.length) throw new Error('no blocks');
+    const byId = new Map([...state.blocks, ...list].map((b) => [b.id, b]));
+    state.blocks = [...byId.values()].sort((x, y) => y.height - x.height);
+    loadingOlder = false;
+    renderBlocks();
+    const card = $(`#blocks .block[data-id="${list[0].id}"]`), chain = $('.chain');
+    if (card && chain) chain.scrollTo({ left: card.offsetLeft - 40, behavior: 'smooth' }); // reveal the new cards
+  } catch (e) {
+    console.warn('older blocks', e);
+    setMoreLabel('Réessayer', 'chargement impossible');
+  } finally { loadingOlder = false; moreBtn.disabled = false; }
+}
+moreBtn.addEventListener('click', loadOlder);
+$('#follow').addEventListener('change', (e) => { // re-enabling the follow mode jumps back to the latest block
+  if (!e.target.checked || !scene3d || !state.blocks.length) return;
+  if (state.sceneOffset > 0 || state.detached) showLive(); else focusSlot(state.blocks[0].id, true);
+});
+
 // ---------- startup ----------
 // Merge the latest blocks into the state (startup, and backfill after a WebSocket reconnect).
 async function refreshBlocks() {
   const list = await api('/v1/blocks');
+  state.tip = Math.max(state.tip, ...list.map((b) => b.height));
+  if (state.detached) return; // browsing a searched block: the live list is rebuilt when coming back
   const byId = new Map([...list, ...state.blocks].map((b) => [b.id, b]));
-  const merged = [...byId.values()].sort((x, y) => y.height - x.height).slice(0, MAX_BLOCKS);
+  const merged = [...byId.values()].sort((x, y) => y.height - x.height);
   if (merged.length === state.blocks.length && merged.every((b, i) => b.id === state.blocks[i].id)) return; // nothing new
   const first = !state.blocks.length;
+  const shift = first ? 0 : merged.findIndex((b) => b.id === state.blocks[0].id); // blocks added above the previous newest
+  if (shift > 0 && state.sceneOffset > 0) state.sceneOffset += shift;
   state.blocks = merged;
   renderBlocks();
-  if (first) miners?.seed(merged.slice(0, 4).reverse().map(minerInfo)); // recent blocks, without animation
+  if (first && !state.seeded) { state.seeded = true; miners?.seed(merged.slice(0, 4).reverse().map(minerInfo)); } // recent blocks, without animation
   if (!scene3d) return;
   if (first) setSceneMsg('Chargement des transactions…'); else resetProjected();
   syncScene();
