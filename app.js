@@ -2,7 +2,7 @@ const API = 'https://mempool.space/api';
 const WS_URL = 'wss://mempool.space/api/v1/ws';
 const MAX_BLOCKS = 12;
 const MAX_TXS = 200;       // rows kept in the feed
-const POLL_MS = 2000;      // /mempool/recent only returns ~10 txs: poll it often so none are missed
+const POLL_MS = 1000;      // /mempool/recent only returns ~10 txs: poll it often so none are missed
 const FLUSH_MS = 300;      // feed render interval (batches arrivals)
 
 const $ = (s) => document.querySelector(s);
@@ -248,7 +248,7 @@ function focusSlot(id, auto = false) {
 
 // ---------- rendering: transaction feed ----------
 // Several sources feed the same stream (deduplicated by txid):
-//   1. /mempool/recent (polled every 2 s)
+//   1. /mempool/recent (polled every second)
 //   2. transactions entering the next block (WebSocket, track-mempool-block)
 //   3. if the server sends them: 'transactions' / 'mempool-txids' (formats not verified live)
 const txBuffer = [];                 // arrivals waiting to be displayed (oldest first)

@@ -13,9 +13,10 @@
   const GROW = 0.7;         // tower growth duration (s)
   const STAGGER = 0.9;      // spread of the start times (s)
   const STOPS = [[1, 0x2d3a9e], [4, 0x1f8fe0], [10, 0x22c9a6], [25, 0x7ddc4a], [60, 0xf2d33c], [120, 0xf7931a], [250, 0xff3d6e]];
-  const MAX_ARRIVALS = 40;  // animated arrivals per update (the rest appear directly)
-  const MAX_STREAM = 90;    // stream particles in flight/pending (txs arriving in the mempool)
-  const ARRIVAL_GAP = 0.05; // delay between two arrivals (s)
+  const MAX_ARRIVALS = 80;  // animated arrivals per update (the rest appear directly)
+  const MAX_STREAM = 200;    // stream particles in flight/pending (txs arriving in the mempool)
+  const MORPH = 0.8;        // towers glide to their new place when a block is re-laid out (s)
+  const ARRIVAL_GAP = 0.03; // delay between two arrivals (s)
   const FLIGHT = 1.2;       // fall duration (s)
   const POP = 0.35;         // tower pop duration on landing (s)
   const FLASH = 0.7;        // white flash duration (s)
@@ -159,6 +160,7 @@
       if (!slot.mesh) return;
       slot.group.remove(slot.mesh); slot.mesh.material.dispose(); slot.mesh.dispose && slot.mesh.dispose();
       slot.mesh = null;
+      slot.morph = null;
       dropHover(slot);
     }
 
@@ -180,12 +182,26 @@
     }
 
     // e = growth progress (0 = on the ground, 1 = full height)
-    function setTower(slot, k, e) {
-      const r = slot.rects[k];
+    function place(slot, k, r, height) {
       dummy.position.set(r.x + r.w / 2 - SIZE / 2, 0, r.y + r.h / 2 - SIZE / 2);
-      dummy.scale.set(Math.max(0.02, r.w * 0.86), Math.max(0.001, slot.heights[k] * e), Math.max(0.02, r.h * 0.86));
+      dummy.scale.set(Math.max(0.02, r.w * 0.86), Math.max(0.001, height), Math.max(0.02, r.h * 0.86));
       dummy.updateMatrix();
       slot.mesh.setMatrixAt(k, dummy.matrix);
+    }
+    function setTower(slot, k, e) { place(slot, k, slot.rects[k], slot.heights[k] * e); }
+
+    // Re-layout transition: every tower already in the block glides from its old footprint to its new one
+    // (new towers grow in place). Towers still handled by an arrival animation are left alone.
+    function writeMorph(slot, p) {
+      const skip = new Set(slot.arrivals.map((a) => a.k));
+      const e = 1 - Math.pow(1 - p, 3), lerp = (a, b) => a + (b - a) * e;
+      for (let k = 0; k < slot.list.length; k++) {
+        if (skip.has(k)) continue;
+        const to = slot.rects[k], th = slot.heights[k], f = slot.morph.from[k];
+        if (!f) place(slot, k, to, th * e);
+        else place(slot, k, { x: lerp(f.r.x, to.x), y: lerp(f.r.y, to.y), w: lerp(f.r.w, to.w), h: lerp(f.r.h, to.h) }, lerp(f.h, th));
+      }
+      slot.mesh.instanceMatrix.needsUpdate = true;
     }
 
     function writeMatrices(slot) {
@@ -298,6 +314,9 @@
       const lane = cb.length ? COINBASE_SIDE : 0;
       const sum = rest.reduce((s, x) => s + Math.max(1, x.vsize), 0);
       const laid = rest.length ? treemap(rest.map((x) => Math.max(1, x.vsize)), SIZE, SIZE - lane, txs.approx ? sum : BLOCK_VSIZE) : [];
+      // previous footprints by txid, to glide towers to their new place (only for an in-place update of a shown block)
+      const prev = !animate && !reduceMotion && slot.mesh && slot.list.length
+        ? new Map(slot.list.map((x, k) => [x.txid, { r: slot.rects[k], h: slot.heights[k] }])) : null;
       slot.list = cb.concat(rest);
       slot.rects = cb.map(() => ({ x: 0, y: 0, w: COINBASE_SIDE, h: COINBASE_SIDE })).concat(laid.map((r) => ({ x: r.x, y: r.y + lane, w: r.w, h: r.h })));
       slot.heights = slot.list.map((x) => (x.coinbase ? FRAME_H - 1 : towerHeight(x.rate)));
@@ -329,7 +348,8 @@
       mesh.instanceColor.needsUpdate = true;
       slot.t = animate ? 0 : STAGGER + GROW;
       slot.growing = !!animate;
-      writeMatrices(slot);
+      if (prev) { slot.morph = { t: 0, from: slot.list.map((x) => prev.get(x.txid) || null) }; writeMorph(slot, 0); }
+      else { slot.morph = null; writeMatrices(slot); }
       // re-anchor in-flight particles on their (possibly moved) tower; drop those whose tx left the block
       const index = new Map(slot.list.map((x, k) => [x.txid, k]));
       for (const a of carried) {
@@ -497,6 +517,7 @@
       for (const s of slots.values()) {
         s.group.position.x += (s.targetX - s.group.position.x) * k;   // slides into place
         s.group.position.y += (0 - s.group.position.y) * Math.min(1, dt * 3.5); // fall
+        if (s.morph && s.mesh) { s.morph.t += dt; const p = Math.min(1, s.morph.t / MORPH); writeMorph(s, p); if (p >= 1) s.morph = null; }
         if (s.growing && s.mesh) { s.t += dt; writeMatrices(s); if (s.t > STAGGER + GROW) s.growing = false; }
         updateArrivals(s, dt);
         updateStream(s, dt);
