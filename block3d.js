@@ -1,28 +1,28 @@
-// Scène 3D multi-blocs : le prochain bloc (projection) puis les derniers blocs minés, alignés.
-// Chaque transaction est une tour posée sur le plateau de son bloc :
-//   surface = taille (vsize, treemap : les plus grosses tx d'abord)   hauteur + couleur = taux de frais (sat/vB)
-// Dépend des scripts globaux THREE (r147) ; EffectComposer/UnrealBloomPass sont optionnels.
+// Multi-block 3D scene: the next block (projection) followed by the latest mined blocks, in a row.
+// Each transaction is a tower standing on its block's platform:
+//   footprint = size (vsize, treemap: largest txs first)   height + color = fee rate (sat/vB)
+// Depends on the global THREE scripts (r147); EffectComposer/UnrealBloomPass are optional.
 (function () {
   'use strict';
 
-  const SIZE = 40;          // côté du plateau d'un bloc
-  const PITCH = 60;         // distance entre deux blocs
-  const FRAME_H = 16;       // hauteur de la cage
-  const COINBASE_SIDE = 3;  // côté du pilier de la coinbase
-  const BLOCK_VSIZE = 1e6;  // capacité d'un bloc (vB) : référence pour l'échelle des surfaces
-  const GROW = 0.7;         // durée de pousse d'une tour (s)
-  const STAGGER = 0.9;      // étalement des départs (s)
+  const SIZE = 40;          // side of a block's platform
+  const PITCH = 60;         // distance between two blocks
+  const FRAME_H = 16;       // height of the cage
+  const COINBASE_SIDE = 3;  // side of the coinbase pillar
+  const BLOCK_VSIZE = 1e6;  // block capacity (vB): reference for the footprint scale
+  const GROW = 0.7;         // tower growth duration (s)
+  const STAGGER = 0.9;      // spread of the start times (s)
   const STOPS = [[1, 0x2d3a9e], [4, 0x1f8fe0], [10, 0x22c9a6], [25, 0x7ddc4a], [60, 0xf2d33c], [120, 0xf7931a], [250, 0xff3d6e]];
-  const MAX_ARRIVALS = 40;  // arrivées animées par mise à jour (le reste apparaît directement)
-  const MAX_STREAM = 90;    // particules de flux en vol/en attente (tx qui arrivent dans le mempool)
-  const ARRIVAL_GAP = 0.05; // décalage entre deux arrivées (s)
-  const FLIGHT = 1.2;       // durée de la chute (s)
-  const POP = 0.35;         // durée de pousse de la tour à l'atterrissage (s)
-  const FLASH = 0.7;        // durée du flash blanc (s)
+  const MAX_ARRIVALS = 40;  // animated arrivals per update (the rest appear directly)
+  const MAX_STREAM = 90;    // stream particles in flight/pending (txs arriving in the mempool)
+  const ARRIVAL_GAP = 0.05; // delay between two arrivals (s)
+  const FLIGHT = 1.2;       // fall duration (s)
+  const POP = 0.35;         // tower pop duration on landing (s)
+  const FLASH = 0.7;        // white flash duration (s)
   const THEME ={ mined: 0xf7931a, next: 0x4cc9f0 };
 
-  // Treemap « squarified » : vals (>0) -> rectangles dont l'aire est proportionnelle à la valeur.
-  // capacity : total de référence pour l'échelle des aires (≥ somme des valeurs) ; un bloc peu rempli laisse du vide
+  // Squarified treemap: vals (>0) -> rectangles whose area is proportional to the value.
+  // capacity: reference total for the area scale (≥ sum of values); a sparsely filled block leaves empty space
   function treemap(vals, W, H, capacity) {
     const k = (W * H) / Math.max(capacity || 0, vals.reduce((s, v) => s + v, 0));
     const out = new Array(vals.length);
@@ -61,11 +61,11 @@
       const [a, ca] = STOPS[i], [b, cb] = STOPS[i + 1];
       const t = Math.min(1, Math.max(0, (Math.log(r) - Math.log(a)) / (Math.log(b) - Math.log(a))));
       out.setHex(ca).lerp(tmpB.setHex(cb), t);
-      return out.multiplyScalar(0.75 + Math.min(0.55, Math.log10(r + 1) * 0.3)); // >1 : fait « briller » le bloom
+      return out.multiplyScalar(0.75 + Math.min(0.55, Math.log10(r + 1) * 0.3)); // >1: makes the bloom "glow"
     }
     const towerHeight = (rate) => 0.6 + 12 * (Math.log(1 + Math.min(rate, 300)) / Math.log(301));
 
-    // ----- scène commune -----
+    // ----- shared scene -----
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     container.appendChild(renderer.domElement);
@@ -98,13 +98,13 @@
       composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.55, 0.92));
     }
 
-    // ----- ressources partagées -----
-    const unitBox = new THREE.BoxGeometry(1, 1, 1); unitBox.translate(0, 0.5, 0); // base de la tour à y = 0
+    // ----- shared resources -----
+    const unitBox = new THREE.BoxGeometry(1, 1, 1); unitBox.translate(0, 0.5, 0); // tower base at y = 0
     const cageGeo = new THREE.BoxGeometry(SIZE, FRAME_H, SIZE);
     const cageEdges = new THREE.EdgesGeometry(cageGeo);
     const slabGeo = new THREE.BoxGeometry(SIZE + 2, 0.8, SIZE + 2);
     const ringGeo = new THREE.RingGeometry(SIZE * 0.55, SIZE * 0.575, 96);
-    const cubeGeo = new THREE.BoxGeometry(1, 1, 1);   // particule d'une transaction qui arrive
+    const cubeGeo = new THREE.BoxGeometry(1, 1, 1);   // particle for an incoming transaction
     const dummy = new THREE.Object3D();
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const easeOutBack = (q) => 1 + 2.70158 * Math.pow(q - 1, 3) + 1.70158 * Math.pow(q - 1, 2);
@@ -121,7 +121,7 @@
       return sp;
     }
 
-    // ----- blocs (« slots ») -----
+    // ----- blocks ("slots") -----
     const slots = new Map();   // id -> slot
     let focusId = null, snapped = false;
 
@@ -138,7 +138,7 @@
       ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; group.add(ring);
       const label = labelSprite(meta.label, color);
       label.position.set(0, FRAME_H + 5, 0); group.add(label);
-      group.position.y = 28; // les nouveaux blocs « tombent » en place
+      group.position.y = 28; // new blocks "fall" into place
       scene.add(group);
       const slot = { id: meta.id, kind: meta.kind, group, ring, cage, glass, targetX: 0, mesh: null, txs: null,
         list: [], rects: [], heights: [], base: null, t: 0, growing: false, shock: 0, arrivals: [], stream: [], pulse: 0 };
@@ -174,7 +174,7 @@
       slots.delete(slot.id);
     }
 
-    // e = avancement de la pousse (0 = au sol, 1 = pleine hauteur)
+    // e = growth progress (0 = on the ground, 1 = full height)
     function setTower(slot, k, e) {
       const r = slot.rects[k];
       dummy.position.set(r.x + r.w / 2 - SIZE / 2, 0, r.y + r.h / 2 - SIZE / 2);
@@ -192,7 +192,7 @@
       slot.mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // Une transaction qui rejoint le bloc : un cube lumineux tombe du ciel dans le plateau, puis sa tour surgit.
+    // A transaction joining the block: a glowing cube falls from the sky onto the platform, then its tower pops up.
     function spawnArrivals(slot, ids) {
       const index = new Map(slot.list.map((x, k) => [x.txid, k]));
       let n = 0;
@@ -209,13 +209,13 @@
         const to = new THREE.Vector3(r.x + r.w / 2 - SIZE / 2, side / 2, r.y + r.h / 2 - SIZE / 2);
         slot.group.add(mesh);
         slot.arrivals.push({ k, mesh, from, to, delay: n * ARRIVAL_GAP, t: 0, landed: false, popT: 0 });
-        setTower(slot, k, 0); // la tour n'existe pas encore : elle surgira à l'atterrissage
+        setTower(slot, k, 0); // the tower doesn't exist yet: it pops up on landing
         n++;
       }
       if (n) slot.mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // Flux : chaque nouvelle transaction du mempool est une particule qui tombe vers le prochain bloc (décor, pas son contenu exact)
+    // Stream: every new mempool transaction is a particle falling toward the next block (decoration, not its exact content)
     function streamInto(slot, items) {
       for (const it of items) {
         if (slot.stream.length >= MAX_STREAM) break;
@@ -255,9 +255,9 @@
         if (!a.landed) {
           const p = Math.min(1, local / FLIGHT);
           a.mesh.visible = true;
-          a.mesh.position.copy(a.from).lerp(a.to, p * p); // accélère en tombant
+          a.mesh.position.copy(a.from).lerp(a.to, p * p); // accelerates while falling
           a.mesh.rotation.y += dt * 6;
-          if (p >= 1) { // atterrissage : la particule disparaît, la tour pousse, la cage pulse
+          if (p >= 1) { // landing: the particle disappears, the tower grows, the cage pulses
             a.landed = true;
             s.group.remove(a.mesh); a.mesh.material.dispose();
             s.pulse = 1;
@@ -265,7 +265,7 @@
         } else {
           a.popT += dt;
           setTower(s, a.k, easeOutBack(Math.min(1, a.popT / POP)));
-          const flash = Math.max(0, 1 - a.popT / FLASH); // flash blanc qui s'estompe vers la vraie couleur
+          const flash = Math.max(0, 1 - a.popT / FLASH); // white flash fading to the real color
           const col = s.mesh.instanceColor.array;
           for (let c = 0; c < 3; c++) col[a.k * 3 + c] = s.base[a.k * 3 + c] * (1 - flash) + 2.4 * flash;
         }
@@ -279,9 +279,9 @@
       disposeMesh(slot);
       const txs = slot.txs;
       if (!txs || !txs.length) { slot.list = []; return; }
-      // La coinbase est un pilier carré de taille fixe dans un coin ; les autres tx se partagent le reste du plateau.
-      // Échelle : un bloc plein (~1 Mvb) remplit tout, un bloc presque vide en laisse la majeure partie libre (sinon une
-      // coinbase seule, ou 2-3 grosses tx, deviendraient un bloc géant). Données provisoires (vsize=1) : tout le plateau.
+      // The coinbase is a fixed-size square pillar in a corner; the other txs share the rest of the platform.
+      // Scale: a full block (~1 Mvb) fills everything, an almost empty block leaves most of it free (otherwise a
+      // lone coinbase, or 2-3 big txs, would become a giant block). Provisional data (vsize=1): the whole platform.
       const cb = txs.filter((x) => x.coinbase), rest = txs.filter((x) => !x.coinbase).sort((a, b) => b.vsize - a.vsize);
       const lane = cb.length ? COINBASE_SIDE : 0;
       const sum = rest.reduce((s, x) => s + Math.max(1, x.vsize), 0);
@@ -292,7 +292,7 @@
       const material = new THREE.MeshStandardMaterial({ metalness: 0.35, roughness: 0.4 });
       if (slot.kind === 'next') { material.transparent = true; material.opacity = 0.82; }
       const mesh = slot.mesh = new THREE.InstancedMesh(unitBox, material, slot.list.length);
-      mesh.frustumCulled = false; // la boîte unité est à l'origine : le culling la ferait disparaître
+      mesh.frustumCulled = false; // the unit box sits at the origin: culling would make it disappear
       slot.base = new Float32Array(slot.list.length * 3);
       const c = new THREE.Color();
       slot.list.forEach((x, k) => {
@@ -314,7 +314,7 @@
 
     function setHover(h) {
       if ((hover && h && hover.slot === h.slot && hover.id === h.id) || (!hover && !h)) return;
-      if (hover) { // restaure la couleur
+      if (hover) { // restore the color
         const col = hover.slot.mesh.instanceColor;
         col.array.set(hover.slot.base.subarray(hover.id * 3, hover.id * 3 + 3), hover.id * 3);
         col.needsUpdate = true;
@@ -332,7 +332,7 @@
       let best = null;
       for (const slot of slots.values()) {
         if (!slot.mesh) continue;
-        // pré-test sur la cage : évite de tester des milliers d'instances pour les blocs hors du rayon
+        // pre-test on the cage: avoids testing thousands of instances for blocks outside the ray
         const x = slot.group.position.x;
         box.min.set(x - SIZE / 2, 0, -SIZE / 2); box.max.set(x + SIZE / 2, FRAME_H, SIZE / 2);
         if (!ray.ray.intersectsBox(box)) continue;
@@ -359,20 +359,20 @@
       const isClick = down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 5;
       down = null;
       if (!isClick) return;
-      pick(e); // couvre aussi le tactile (pas de pointermove avant le tap)
+      pick(e); // also covers touch (no pointermove before the tap)
       if (!hover) return;
-      // clic sur un autre bloc : on s'y déplace ; clic sur le bloc courant : détail de la transaction
+      // click on another block: move to it; click on the current block: transaction detail
       if (hover.slot.id !== focusId) opts.onFocus && opts.onFocus(hover.slot.id);
       else opts.onPick && opts.onPick(hover.slot.list[hover.id]);
     });
 
-    // ----- chaîne : des maillons relient chaque bloc au précédent, avec son hash -----
-    // Une paire = (bloc le plus récent, son prédécesseur). Le lien « PROCHAIN » est en attente : il doit référencer le dernier bloc miné.
-    const LINK_LEN = PITCH - SIZE - 2;   // longueur du trait entre deux plateaux
+    // ----- chain: a line links each block to the previous one, with its hash -----
+    // A pair = (most recent block, its predecessor). The "NEXT" link is pending: it must reference the latest mined block.
+    const LINK_LEN = PITCH - SIZE - 2;   // length of the line between two platforms
     const linkGeo = new THREE.BoxGeometry(1, 0.2, 0.2);
     const packetGeo = new THREE.SphereGeometry(0.75, 12, 8);
-    const links = new Map();   // id du bloc le plus récent de la paire -> lien
-    let linksReady = false;    // faux tant que la première liste de blocs n'est pas arrivée : pas d'animation au chargement
+    const links = new Map();   // id of the pair's most recent block -> link
+    let linksReady = false;    // false until the first block list has arrived: no animation on load
 
     function hashSprite(hash, color) {
       const c = document.createElement('canvas'); c.width = 2048; c.height = 128;
@@ -427,10 +427,10 @@
         const half = LINK_LEN / 2;
         const grow = Math.min(1, l.t / 0.9);
         l.beam.scale.x = Math.max(0.001, LINK_LEN * (1 - Math.pow(1 - grow, 3)));
-        l.beam.position.x = half - l.beam.scale.x / 2; // pousse depuis le bloc précédent (à droite)
-        l.mat.opacity = l.pending ? 0.45 + 0.2 * Math.sin(now * 3) : 1; // en attente : le trait pulse
+        l.beam.position.x = half - l.beam.scale.x / 2; // grows from the previous block (on the right)
+        l.mat.opacity = l.pending ? 0.45 + 0.2 * Math.sin(now * 3) : 1; // pending: the line pulses
         l.sprite.material.opacity = Math.min(1, Math.max(0, (l.t - 0.9) / 0.5)) * (l.pending ? 0.75 : 0.95);
-        if (!l.landed) { // le hash voyage du bloc précédent (à droite) vers le nouveau (à gauche), puis la cage s'allume
+        if (!l.landed) { // the hash travels from the previous block (right) to the new one (left), then the cage lights up
           const q = (l.t - 0.9) / 1;
           l.packet.visible = q > 0 && q < 1;
           l.packet.position.set(half - 2 * half * Math.min(1, Math.max(0, q)), 0, 0);
@@ -439,7 +439,7 @@
       }
     }
 
-    // ----- taille & boucle -----
+    // ----- size & loop -----
     function resize() {
       const w = container.clientWidth, h = container.clientHeight;
       if (!w || !h) return;
@@ -458,8 +458,8 @@
       if (!visible) return;
       const k = Math.min(1, dt * 5);
       for (const s of slots.values()) {
-        s.group.position.x += (s.targetX - s.group.position.x) * k;   // glisse vers sa place
-        s.group.position.y += (0 - s.group.position.y) * Math.min(1, dt * 3.5); // chute
+        s.group.position.x += (s.targetX - s.group.position.x) * k;   // slides into place
+        s.group.position.y += (0 - s.group.position.y) * Math.min(1, dt * 3.5); // fall
         if (s.growing) { s.t += dt; writeMatrices(s); if (s.t > STAGGER + GROW) s.growing = false; }
         if (s.shock > 0) {
           s.shock += dt / 1.4;
@@ -469,14 +469,14 @@
         }
         updateArrivals(s, dt);
         updateStream(s, dt);
-        if (s.pulse > 0) { // la cage s'illumine à chaque atterrissage
+        if (s.pulse > 0) { // the cage lights up on every landing
           s.pulse = Math.max(0, s.pulse - dt * 2.5);
           s.cage.material.opacity = 0.6 + 0.4 * s.pulse;
           s.glass.material.opacity = 0.035 + 0.1 * s.pulse;
         }
       }
       updateLinks(dt, now / 1000);
-      // la caméra suit le bloc sélectionné, en translation (l'angle choisi par l'utilisateur est conservé)
+      // the camera follows the selected block, translation only (the user-chosen angle is kept)
       const f = slots.get(focusId);
       if (f) {
         const dx = (f.targetX - controls.target.x) * (snapped ? Math.min(1, dt * 4) : 1);
@@ -484,7 +484,7 @@
         snapped = true;
       }
       if (pending) { pick(pending); pending = null; }
-      controls.autoRotate = auto && !inside; // on fige la rotation pendant le survol
+      controls.autoRotate = auto && !inside; // freeze the rotation while hovering
       controls.update();
       composer ? composer.render() : renderer.render(scene, camera);
     })(last);
@@ -499,7 +499,7 @@
       setTxs(id, txs, incoming) {
         const s = slots.get(id);
         if (!s || s.txs === txs) return;
-        const first = !s.txs || s.txs.approx; // données provisoires -> vraies données : la pousse repart
+        const first = !s.txs || s.txs.approx; // provisional -> real data: the growth restarts
         s.txs = txs;
         buildMesh(s, first, incoming);
       },

@@ -1,9 +1,9 @@
 const API = 'https://mempool.space/api';
 const WS_URL = 'wss://mempool.space/api/v1/ws';
 const MAX_BLOCKS = 12;
-const MAX_TXS = 200;       // lignes conservées dans le flux
-const POLL_MS = 2000;      // /mempool/recent ne renvoie que ~10 tx : on l'interroge souvent pour ne rien rater
-const FLUSH_MS = 300;      // fréquence d'affichage du flux (regroupe les arrivées)
+const MAX_TXS = 200;       // rows kept in the feed
+const POLL_MS = 2000;      // /mempool/recent only returns ~10 txs: poll it often so none are missed
+const FLUSH_MS = 300;      // feed render interval (batches arrivals)
 
 const $ = (s) => document.querySelector(s);
 
@@ -52,7 +52,7 @@ function blockCard(b, fresh) {
 
 function upcomingCard(m, i) {
   const [lo, hi] = m.feeRange ? [m.feeRange[0], m.feeRange.at(-1)] : [0, 0];
-  const first = i === 0; // le premier bloc projeté est le prochain bloc, affiché en 3D
+  const first = i === 0; // the first projected block is the next block, shown in 3D
   return el('div', { class: `block pending${first && state.focusId === NEXT_ID ? ' selected' : ''}${first ? ' clickable' : ''}`,
       style: `--fill:${Math.min(1, m.blockVSize / 1e6)}`, onclick: first ? () => focusSlot(NEXT_ID) : null },
     el('b', {}, 'Prochain'),
@@ -66,7 +66,7 @@ function renderBlocks(freshId) {
   $('#blocks').replaceChildren(...state.blocks.map((b) => blockCard(b, b.id === freshId)));
 }
 function renderUpcoming() {
-  $('#upcoming').replaceChildren(...state.upcoming.slice(0, 1).map(upcomingCard)); // on s'arrête au prochain bloc
+  $('#upcoming').replaceChildren(...state.upcoming.slice(0, 1).map(upcomingCard)); // stop at the next block
   if (state.focusId === NEXT_ID) updateHud();
 }
 
@@ -75,14 +75,14 @@ function addBlock(b) {
   state.blocks = [b, ...state.blocks].sort((x, y) => y.height - x.height).slice(0, MAX_BLOCKS);
   renderBlocks(b.id);
   if (!scene3d) return;
-  resetProjected(); // le prochain bloc est entièrement recalculé après chaque bloc miné
+  resetProjected(); // the next block is fully recomputed after every mined block
   syncScene();
   if ($('#follow').checked) focusSlot(b.id, true);
 }
 
-// ---------- scène 3D ----------
-const SHOWN = 12;         // nombre de blocs minés affichés en 3D (en plus du prochain)
-const DETAIL = 4;         // les plus récents (et le bloc sélectionné) sont détaillés ; les plus anciens sont une version simplifiée
+// ---------- 3D scene ----------
+const SHOWN = 12;         // number of mined blocks shown in 3D (besides the next one)
+const DETAIL = 4;         // the most recent (and the selected) blocks are detailed; older ones are a simplified shape
 const NEXT_ID = 'next';
 const stage = $('.stage');
 const scene3d = window.Block3D?.create($('#scene'), {
@@ -95,7 +95,7 @@ const scene3d = window.Block3D?.create($('#scene'), {
   onPick: (t) => openTx(t.txid),
   onFocus: (id) => focusSlot(id),
 });
-if (!scene3d) stage.hidden = true; // Three.js non chargé (hors ligne / CDN bloqué)
+if (!scene3d) stage.hidden = true; // Three.js not loaded (offline / CDN blocked)
 else {
   $('#rotate').addEventListener('change', (e) => scene3d.setAutoRotate(e.target.checked));
   $('#hud-details').addEventListener('click', () => state.selectedId && openBlock(state.selectedId));
@@ -103,13 +103,13 @@ else {
 
 function setSceneMsg(msg) { $('#scene-msg').textContent = msg; }
 
-// Contenu d'un bloc : l'endpoint « summary » donne tout en un appel ; sinon on se rabat sur les seuls txids.
+// Block contents: the "summary" endpoint returns everything in one call; otherwise fall back to txids only.
 async function loadBlockTxs(b) {
   const expected = b.tx_count || 0;
   try {
     const rows = await api(`/v1/block/${b.id}/summary`);
-    // Un bloc tout juste miné peut avoir un résumé incomplet (parfois la seule coinbase) : le dessiner donnerait
-    // une scène fausse (une tour géante). On le refuse et on réessaiera plus tard.
+    // A freshly mined block may have an incomplete summary (sometimes only the coinbase): drawing it would give
+    // a wrong scene (one giant tower). Reject it and retry later.
     if (Array.isArray(rows) && rows.length && rows.length >= expected * 0.95) {
       return rows.map((r, i) => {
         const vsize = r.vsize || 1;
@@ -121,20 +121,20 @@ async function loadBlockTxs(b) {
   const ids = await api(`/block/${b.id}/txids`);
   const rate = b.extras?.medianFee ?? 5;
   const txs = ids.map((txid, i) => ({ txid, vsize: 1, fee: 0, rate, coinbase: i === 0, approx: true }));
-  txs.approx = true; // données provisoires : la scène les affiche, puis les remplace dès que le résumé est complet
+  txs.approx = true; // provisional data: the scene shows it, then replaces it as soon as the summary is complete
   return txs;
 }
 
-// Blocs minés : une promesse par bloc (la même référence de tableau évite de reconstruire la scène)
+// Mined blocks: one promise per block (the same array reference avoids rebuilding the scene)
 const txCache = new Map();
-const RETRY_MS = 8000, MAX_RETRY = 8;   // nouvel essai tant que le bloc n'a que des données provisoires
+const RETRY_MS = 8000, MAX_RETRY = 8;   // retry while the block only has provisional data
 const retryTimers = new Map(), retryCount = new Map();
 function scheduleRetry(b) {
   if (retryTimers.has(b.id) || (retryCount.get(b.id) || 0) >= MAX_RETRY) return;
   retryTimers.set(b.id, setTimeout(() => {
     retryTimers.delete(b.id);
     retryCount.set(b.id, (retryCount.get(b.id) || 0) + 1);
-    if (!state.blocks.slice(0, SHOWN).some((x) => x.id === b.id)) return; // le bloc n'est plus affiché
+    if (!state.blocks.slice(0, SHOWN).some((x) => x.id === b.id)) return; // the block is no longer shown
     txCache.delete(b.id);
     loadSlot(b);
   }, RETRY_MS));
@@ -150,7 +150,7 @@ async function loadSlot(b) {
     txCache.delete(b.id);
     console.warn('bloc', b.height, e);
     if (b.id === state.focusId) setSceneMsg('Chargement du bloc impossible pour le moment, nouvel essai…');
-    scheduleRetry(b); // échec réseau / limite de débit : on réessaie plus tard
+    scheduleRetry(b); // network failure / rate limit: retry later
   }
 }
 
@@ -163,17 +163,17 @@ function syncScene() {
   for (const id of [...txCache.keys()]) if (!shown.some((b) => b.id === id)) txCache.delete(id);
   shown.forEach((b, i) => {
     if (i < DETAIL || b.id === state.focusId) return loadSlot(b);
-    // ancien bloc : pas de téléchargement des transactions, une forme simplifiée (relâche aussi la mémoire du détail)
+    // old block: no transaction download, just a simplified shape (also frees the detail memory)
     txCache.delete(b.id);
     scene3d.setTxs(b.id, null);
     scene3d.setSummary(b.id, { fill: (b.weight || 0) / 4e6, rate: b.extras?.medianFee });
   });
 }
 
-// Prochain bloc : contenu projeté poussé par le WebSocket (track-mempool-block).
-// Format non vérifié en direct : on accepte des tableaux [txid, fee, vsize, value] ou des objets.
+// Next block: projected contents pushed by the WebSocket (track-mempool-block).
+// Format not verified live: accept either [txid, fee, vsize, value] arrays or objects.
 let proj = null, projTimer = 0, projShown = false;
-const projFresh = new Set(); // txids entrés dans le prochain bloc depuis la dernière mise à jour 3D (animation d'arrivée)
+const projFresh = new Set(); // txids that entered the next block since the last 3D update (arrival animation)
 function normTx(r) {
   const o = Array.isArray(r) ? { txid: r[0], fee: r[1], vsize: r[2], value: r[3] } : r;
   const vsize = o.vsize || 1, fee = o.fee || 0;
@@ -187,7 +187,7 @@ function applyProjected(pb) {
     added.forEach((t) => { proj.set(t.txid, t); projFresh.add(t.txid); });
     pushTxs(added);
   } else return;
-  if (!projTimer) projTimer = setTimeout(pushProjected, projShown ? 2500 : 0); // limite les reconstructions
+  if (!projTimer) projTimer = setTimeout(pushProjected, projShown ? 2500 : 0); // throttles rebuilds
 }
 function pushProjected() {
   projTimer = 0;
@@ -223,41 +223,41 @@ function updateHud() {
 
 function focusSlot(id, auto = false) {
   if (!scene3d) return;
-  if (!auto) $('#follow').checked = false; // un choix manuel désactive le suivi
+  if (!auto) $('#follow').checked = false; // a manual choice turns following off
   state.focusId = id;
   state.selectedId = id === NEXT_ID ? null : id;
   scene3d.focus(id);
   const fb = state.blocks.find((x) => x.id === id);
-  if (fb && !txCache.has(id)) { setSceneMsg('Chargement du bloc…'); loadSlot(fb); } // ancien bloc simplifié : on charge son détail
+  if (fb && !txCache.has(id)) { setSceneMsg('Chargement du bloc…'); loadSlot(fb); } // simplified old block: load its detail
   document.querySelectorAll('#blocks .block').forEach((n) => n.classList.toggle('selected', n.dataset.id === id));
   document.querySelector('#upcoming .block')?.classList.toggle('selected', id === NEXT_ID);
   const card = document.querySelector('#blocks .block.selected, #upcoming .block.selected'), chain = document.querySelector('.chain');
-  if (card && chain) chain.scrollTo({ left: card.offsetLeft - (chain.clientWidth - card.offsetWidth) / 2, behavior: 'smooth' }); // sans bouger la page
+  if (card && chain) chain.scrollTo({ left: card.offsetLeft - (chain.clientWidth - card.offsetWidth) / 2, behavior: 'smooth' }); // without scrolling the page
   updateHud();
 }
 
-// ---------- rendu : flux de transactions ----------
-// Plusieurs sources alimentent le même flux (dédoublonné par txid) :
-//   1. /mempool/recent (interrogé toutes les 2 s)
-//   2. les transactions qui entrent dans le prochain bloc (WebSocket, track-mempool-block)
-//   3. si le serveur les envoie : 'transactions' / 'mempool-txids' (formats non vérifiés en direct)
-const txBuffer = [];                 // arrivées en attente d'affichage (la plus ancienne en premier)
-const arrivals = [];                 // horodatages récents, pour le débit
+// ---------- rendering: transaction feed ----------
+// Several sources feed the same stream (deduplicated by txid):
+//   1. /mempool/recent (polled every 2 s)
+//   2. transactions entering the next block (WebSocket, track-mempool-block)
+//   3. if the server sends them: 'transactions' / 'mempool-txids' (formats not verified live)
+const txBuffer = [];                 // arrivals waiting to be displayed (oldest first)
+const arrivals = [];                 // recent timestamps, used for the rate
 let txTotal = 0;
 
 function pushTxs(list) {
   const fresh = [];
   for (const t of list) {
     if (!t || !t.txid || state.seen.has(t.txid)) continue;
-    if (!(proj && proj.has(t.txid))) fresh.push({ rate: t.vsize && t.fee != null ? t.fee / t.vsize : undefined }); // celles du bloc projeté ont leur propre animation
+    if (!(proj && proj.has(t.txid))) fresh.push({ rate: t.vsize && t.fee != null ? t.fee / t.vsize : undefined }); // those in the projected block have their own animation
     state.seen.add(t.txid);
     txTotal++;
     arrivals.push(Date.now());
     txBuffer.push(t);
   }
   if (scene3d && fresh.length) scene3d.stream(fresh);
-  if (txBuffer.length > 1000) txBuffer.splice(0, txBuffer.length - 1000); // pause prolongée : on garde les plus récentes
-  if (state.seen.size > 20000) { // mémoire bornée : on ne garde que ce qui est affiché
+  if (txBuffer.length > 1000) txBuffer.splice(0, txBuffer.length - 1000); // long pause: keep only the most recent
+  if (state.seen.size > 20000) { // bounded memory: keep only what is displayed
     state.seen = new Set([...state.txs.map((t) => t.txid), ...txBuffer.map((t) => t.txid)]);
   }
 }
@@ -276,16 +276,16 @@ function flushTxs() {
   const rate = arrivals.length / 10;
   $('#txcount').textContent = `${nf.format(txTotal)} vues · ≈ ${rate.toFixed(1).replace('.', ',')} tx/s${$('#pause').checked ? ' · en pause' : ''}`;
   if ($('#pause').checked || !txBuffer.length) return;
-  const batch = txBuffer.splice(0).reverse();      // la plus récente en haut
+  const batch = txBuffer.splice(0).reverse();      // newest on top
   state.txs = [...batch, ...state.txs].slice(0, MAX_TXS);
   const list = $('#txs');
-  list.prepend(...batch.slice(0, MAX_TXS).map(txRow)); // rendu incrémental : on n'ajoute que les nouvelles lignes
+  list.prepend(...batch.slice(0, MAX_TXS).map(txRow)); // incremental rendering: only add the new rows
   while (list.children.length > MAX_TXS) list.lastElementChild.remove();
 }
 
 async function pollRecent() {
   try {
-    const list = await api('/mempool/recent'); // ~10 dernières tx entrées dans le mempool, la plus récente en premier
+    const list = await api('/mempool/recent'); // last ~10 txs that entered the mempool, newest first
     pushTxs(list.slice().reverse());
   } catch (e) { console.warn('recent', e); }
 }
@@ -304,7 +304,7 @@ function connect() {
     retry = 0;
     setStatus(true);
     ws.send(JSON.stringify({ action: 'want', data: ['blocks', 'mempool-blocks', 'mempool-txids'] }));
-    ws.send(JSON.stringify({ 'track-mempool-block': 0 })); // contenu du prochain bloc, pour la 3D
+    ws.send(JSON.stringify({ 'track-mempool-block': 0 })); // next block contents, for the 3D scene
   };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
@@ -321,14 +321,14 @@ function connect() {
   ws.onerror = () => ws.close();
 }
 
-// ---------- détails ----------
+// ---------- details ----------
 const dialog = $('#detail');
 const body = $('#detail-body');
 $('#close').onclick = () => dialog.close();
 dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
 
 function show(...nodes) {
-  body.replaceChildren(...nodes.flat()); // aplatit les tableaux (ex. liste de transactions)
+  body.replaceChildren(...nodes.flat()); // flatten arrays (e.g. a list of transactions)
   if (!dialog.open) dialog.showModal();
 }
 
@@ -381,7 +381,7 @@ async function openBlock(hash) {
   } catch (e) { show(el('p', {}, `Bloc introuvable (${e.message})`)); }
 }
 
-// ---------- recherche ----------
+// ---------- search ----------
 $('#search').addEventListener('submit', async (e) => {
   e.preventDefault();
   const q = $('#q').value.trim();
@@ -389,7 +389,7 @@ $('#search').addEventListener('submit', async (e) => {
   try {
     if (/^\d+$/.test(q)) return openBlock(await api(`/block-height/${q}`));
     if (/^[0-9a-fA-F]{64}$/.test(q)) {
-      // un hash de bloc commence par de nombreux zéros
+      // a block hash starts with many zeros
       const blockFirst = q.startsWith('00000000');
       const [a, b] = blockFirst ? [openBlock, openTx] : [openTx, openBlock];
       try { await api(blockFirst ? `/block/${q}` : `/tx/${q}`); return a(q); } catch { return b(q); }
@@ -398,7 +398,7 @@ $('#search').addEventListener('submit', async (e) => {
   } catch (err) { show(el('p', {}, `Introuvable (${err.message})`)); }
 });
 
-// ---------- démarrage ----------
+// ---------- startup ----------
 async function init() {
   try {
     state.blocks = (await api('/v1/blocks')).slice(0, MAX_BLOCKS);
@@ -413,6 +413,6 @@ async function init() {
   pollRecent();
   setInterval(pollRecent, POLL_MS);
   setInterval(flushTxs, FLUSH_MS);
-  setInterval(() => { renderBlocks(); }, 30000); // rafraîchit les « il y a … »
+  setInterval(() => { renderBlocks(); }, 30000); // refresh the "x ago" labels
 }
 init();

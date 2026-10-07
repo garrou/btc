@@ -33,21 +33,21 @@ button:hover { border-color: var(--accent); }
 .chain-wrap.can-prev .nav-prev, .chain-wrap.can-next .nav-next { opacity: 1; pointer-events: auto; }
 .nav svg { display: block; }
 .nav:hover { transform: translateY(-50%) scale(1.1); }
-@media (hover: none) { .nav { display: none; } } /* sur écran tactile : on balaie avec le doigt */
+@media (hover: none) { .nav { display: none; } } /* on touch screens: swipe with a finger */
 
-/* barres de défilement natives remplacées par un curseur discret */
+/* native scrollbars replaced by a discreet thumb */
 html { scrollbar-width: thin; scrollbar-color: #343a4f transparent; }
 .js-scroll { scrollbar-width: none; }
 .js-scroll::-webkit-scrollbar { display: none; }
 .scroll-host { position: relative; }
 .thumb { position: absolute; top: 0; right: 3px; width: 5px; border-radius: 3px; background: var(--muted); opacity: 0; cursor: grab;
   touch-action: none; transition: opacity .25s, width .15s; z-index: 4; }
-.thumb::before { content: ""; position: absolute; inset: 0 -5px; } /* zone de saisie plus large */
+.thumb::before { content: ""; position: absolute; inset: 0 -5px; } /* wider grab area */
 .scroll-host:hover .thumb, .scroll-host.active .thumb, .scroll-host.drag .thumb { opacity: .5; }
 .scroll-host .thumb:hover, .scroll-host.drag .thumb { opacity: .9; width: 7px; }
 .scroll-host.drag .thumb { cursor: grabbing; }
 .row { display: flex; gap: .75rem; }
-#upcoming { flex-direction: row-reverse; } /* le plus proche du prochain bloc est à droite */
+#upcoming { flex-direction: row-reverse; } /* the one closest to the next block is on the right */
 .tip { width: 3px; background: var(--accent); border-radius: 2px; flex: none; }
 
 .block { position: relative; width: 150px; flex: none; padding: .75rem; border-radius: 10px; background: var(--panel);
@@ -84,7 +84,7 @@ dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
 .link { color: var(--accent); cursor: pointer; background: none; border: 0; padding: 0; text-align: left; }
 @media (max-width: 600px) { .io { grid-template-columns: 1fr; } .txs li { grid-template-columns: 1fr auto; } .txs li :nth-child(3) { display: none; } }
 
-/* ---------- scène 3D ---------- */
+/* ---------- 3D scene ---------- */
 [hidden] { display: none !important; }
 .stage { position: relative; height: clamp(380px, 64vh, 660px); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #0b0d14; }
 #scene, #scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
@@ -107,7 +107,7 @@ dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
 .block.pending.clickable { cursor: pointer; border-color: #4cc9f0aa; }
 .block.pending.selected { border-style: solid; border-color: #4cc9f0; box-shadow: 0 0 0 1px #4cc9f0, 0 0 18px #4cc9f055; }
 
-/* évite que la liste de blocs élargisse la page (les éléments de grille ont min-width: auto par défaut) */
+/* keeps the block list from widening the page (grid items default to min-width: auto) */
 main > * { min-width: 0; }
 
 /* ---------- responsive ---------- */
@@ -115,7 +115,7 @@ main > * { min-width: 0; }
 .scene-msg { z-index: 1; }
 .hud-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* fenêtre de détail : rien ne doit dépasser, les hash et adresses passent à la ligne */
+/* detail dialog: nothing may overflow, hashes and addresses wrap */
 dialog { overflow: hidden; max-height: 92vh; max-height: 92dvh; }
 #detail-body { min-width: 0; max-height: calc(92vh - 2.7rem); max-height: calc(92dvh - 2.7rem); overflow-y: auto; padding-right: .5rem; }
 #detail-body h2 { padding-right: 2.5rem; margin-top: 0; }
@@ -134,7 +134,7 @@ dd .mono, .tx-card > .mono, .tx-card > .link, .link.mono { white-space: normal; 
   #search { order: 3; flex: 1 1 100%; min-width: 0; }
   main { padding: .75rem; gap: 1.25rem; }
 
-  /* la barre d'infos ne recouvre plus la scène : elle passe au-dessus et en dessous */
+  /* the info bar no longer overlays the scene: it goes above and below */
   .stage { display: flex; flex-direction: column; height: auto; }
   #scene { position: relative; inset: auto; flex: none; height: min(58vh, 460px); }
   .hud { position: static; background: none; padding: .5rem .75rem; gap: .35rem .75rem; }
@@ -153,7 +153,7 @@ dd .mono, .tx-card > .mono, .tx-card > .link, .link.mono { white-space: normal; 
   h2 small { display: block; margin: .15rem 0 0; }
 }
 
-/* ---------- flux de transactions ---------- */
+/* ---------- transaction feed ---------- */
 .feed-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .5rem; }
 .feed-head small { flex: 1; }
 .pause { margin-left: auto; font-size: .85rem; font-weight: 400; cursor: pointer; display: flex; align-items: center; gap: .35rem; color: var(--muted); }
@@ -162,7 +162,7 @@ dd .mono, .tx-card > .mono, .tx-card > .link, .link.mono { white-space: normal; 
 @keyframes slide { from { opacity: 0; transform: translateY(-10px); } }
 @media (prefers-reduced-motion: reduce) { .txs li.fresh { animation: none; } }
 
-/* ---------- finitions ---------- */
+/* ---------- finishing touches ---------- */
 ::selection { background: color-mix(in srgb, var(--accent) 45%, transparent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .top { position: sticky; top: 0; z-index: 10; background: #11131ad9; backdrop-filter: blur(10px); }
