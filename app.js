@@ -74,6 +74,7 @@ function addBlock(b) {
   if (state.blocks.some((x) => x.id === b.id)) return;
   state.blocks = [b, ...state.blocks].sort((x, y) => y.height - x.height).slice(0, MAX_BLOCKS);
   renderBlocks(b.id);
+  miners?.found(minerInfo(b));
   if (Date.now() - lastStats > 15000) refreshStats(); // a new block moves the retarget progress
   if (!scene3d) return;
   resetProjected(); // the next block is fully recomputed after every mined block
@@ -441,6 +442,7 @@ async function refreshStats() {
     const difficulty = num(hr.value.currentDifficulty) ?? num(hr.value.difficulty?.at?.(-1)?.difficulty);
     if (hashrate) {
       const gw = (hashrate / 1e12) * J_PER_TH / 1e9; // TH/s x J/TH = W
+      miners?.setHashrate(hashrate);
       setStat('st-hash', `${fr(hashrate / 1e18)}<em>EH/s</em>`);
       setStat('st-power', `≈ ${fr(gw)}<em>GW</em>`);
       setStat('st-power-sub', `≈ ${fr(gw * 8.76, 0)} TWh/an · estimation à ${J_PER_TH} J/TH`);
@@ -468,6 +470,25 @@ async function refreshStats() {
 }
 let lastStats = 0;
 
+// ---------- miners schematic ----------
+const miners = window.MinersViz?.create($('#miners'));
+if (!miners) $('#miners').hidden = true;
+const minerInfo = (b) => ({ pool: b.extras?.pool?.name ?? 'Inconnu', height: b.height, hash: b.id, nonce: b.nonce });
+
+// Pool shares over the last 24 h (number of blocks found per pool)
+async function refreshPools() {
+  try {
+    const res = await api('/v1/mining/pools/24h');
+    const list = (res.pools || []).map((p) => ({ name: p.name, share: p.blockCount })).filter((p) => p.share > 0);
+    if (!list.length) throw new Error('no pools');
+    miners?.setPools(list);
+    setTimeout(refreshPools, 10 * 60000);
+  } catch (e) {
+    console.warn('pools', e);
+    setTimeout(refreshPools, 30000);
+  }
+}
+
 // ---------- startup ----------
 // Merge the latest blocks into the state (startup, and backfill after a WebSocket reconnect).
 async function refreshBlocks() {
@@ -478,6 +499,7 @@ async function refreshBlocks() {
   const first = !state.blocks.length;
   state.blocks = merged;
   renderBlocks();
+  if (first) miners?.seed(merged.slice(0, 4).reverse().map(minerInfo)); // recent blocks, without animation
   if (!scene3d) return;
   if (first) setSceneMsg('Chargement des transactions…'); else resetProjected();
   syncScene();
@@ -494,6 +516,7 @@ async function init() {
   loadBlocks();
   refreshStats();
   setInterval(refreshStats, 60000);
+  if (miners) refreshPools();
   connect();
   pollRecent();
   setInterval(pollRecent, POLL_MS);

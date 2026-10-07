@@ -190,3 +190,29 @@ dialog::backdrop { backdrop-filter: blur(3px); }
 @media (max-width: 860px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 380px) { .stat b { font-size: 1.15rem; } .stat { padding: .6rem .7rem; } }
 @media (prefers-reduced-motion: reduce) { .stat .bar u { transition: none; } }
+
+/* ---------- miners schematic ---------- */
+.miners h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .5rem; }
+.miners h2 small { flex: 1 1 18rem; margin-left: 0; }
+.seg { margin-left: auto; display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: .3rem .8rem; font-size: .85rem; background: var(--panel); color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); color: var(--text); }
+.miners-box { border: 1px solid var(--line); border-radius: 14px; background: #0b0d14; padding: .5rem .75rem .75rem; display: grid; gap: .6rem; }
+.miners-box canvas { width: 100%; height: 300px; display: block; }
+.miners-info { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem .75rem; }
+.m-stat { display: flex; flex-direction: column; min-width: 0; }
+.m-stat .k { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.m-stat b, .m-stat code { font: .85rem var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-banner { min-height: 2.6rem; padding: .5rem .75rem; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); font-size: .9rem; overflow-wrap: anywhere; }
+.m-banner b { color: #ffd76a; } .m-banner span { color: var(--muted); }
+.m-banner code { display: block; margin-top: .15rem; font: .75rem var(--mono); color: var(--muted); }
+.m-chain { display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none; padding-bottom: .1rem; }
+.m-chain::-webkit-scrollbar { display: none; }
+.m-block { flex: none; width: 150px; padding: .45rem .6rem; border-radius: 8px; background: var(--panel); border: 1px solid var(--line);
+  border-left: 3px solid var(--c, var(--accent)); display: flex; flex-direction: column; gap: .05rem; animation: slide .3s ease-out; }
+.m-block b { font-size: .95rem; } .m-block span { font-size: .78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-block code { font: .68rem var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.m-block.sim { border-style: dashed; border-left-style: solid; } .m-block small { color: var(--accent); font-size: .68rem; }
+@media (max-width: 860px) { .miners-info { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .miners-box canvas { height: 260px; } .seg { margin-left: 0; } }

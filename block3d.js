@@ -292,7 +292,7 @@
       const txs = slot.txs;
       if (!txs || !txs.length) {
         for (const a of carried) { slot.group.remove(a.mesh); a.mesh.material.dispose(); }
-        disposeMesh(slot); slot.list = []; return;
+        disposeMesh(slot); slot.list = []; slot.growing = false; return;
       }
       // The coinbase is a fixed-size square pillar in a corner; the other txs share the rest of the platform.
       // Scale: a full block (~1 Mvb) fills everything, an almost empty block leaves most of it free (otherwise a
@@ -501,7 +501,7 @@
       for (const s of slots.values()) {
         s.group.position.x += (s.targetX - s.group.position.x) * k;   // slides into place
         s.group.position.y += (0 - s.group.position.y) * Math.min(1, dt * 3.5); // fall
-        if (s.growing) { s.t += dt; writeMatrices(s); if (s.t > STAGGER + GROW) s.growing = false; }
+        if (s.growing && s.mesh) { s.t += dt; writeMatrices(s); if (s.t > STAGGER + GROW) s.growing = false; }
         if (s.shock > 0) {
           s.shock += dt / 1.4;
           s.ring.scale.setScalar(0.6 + s.shock * 2.6);

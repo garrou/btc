@@ -63,6 +63,27 @@
       </div>
     </section>
 
+    <section class="miners" id="miners">
+      <h2>Mineurs
+        <small>chaque pool tente des hash ; le premier sous la cible gagne le bloc (schéma symbolique)</small>
+        <span class="seg" role="group" aria-label="Mode">
+          <button type="button" data-mode="live" aria-pressed="true">Direct</button>
+          <button type="button" data-mode="demo" aria-pressed="false">Démo accélérée</button>
+        </span>
+      </h2>
+      <div class="miners-box">
+        <canvas aria-label="Schéma des mineurs : chaque point est un hash essayé"></canvas>
+        <div class="miners-info">
+          <div class="m-stat"><span class="k">Cible</span><code data-m="target">—</code></div>
+          <div class="m-stat"><span class="k">Dernier essai</span><code data-m="attempt">—</code></div>
+          <div class="m-stat"><span class="k">Hashes tentés (depuis l'ouverture)</span><b data-m="hashes">—</b></div>
+          <div class="m-stat"><span class="k">1 point ≈</span><b data-m="unit">—</b></div>
+        </div>
+        <div class="m-banner" data-m="banner">En attente du prochain bloc…</div>
+        <div class="m-chain" data-m="chain"></div>
+      </div>
+    </section>
+
     <section>
       <h2>Blocs <small>prochain bloc (projection du mempool) → minés · clic = aller à ce bloc en 3D, double-clic = détails</small></h2>
       <div class="chain-wrap">
@@ -99,6 +120,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
   <script defer src="block3d.js"></script>
+  <script defer src="miners.js"></script>
   <script defer src="ui.js"></script>
   <script defer src="app.js"></script>
 </body>
