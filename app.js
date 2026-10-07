@@ -85,7 +85,8 @@ const SHOWN = 12;         // number of mined blocks shown in 3D (besides the nex
 const DETAIL = 4;         // the most recent (and the selected) blocks are detailed; older ones are a simplified shape
 const NEXT_ID = 'next';
 const stage = $('.stage');
-const scene3d = window.Block3D?.create($('#scene'), {
+let scene3d = null;
+try { scene3d = window.Block3D?.create($('#scene'), {
   tooltip: $('#tip3d'),
   describe: (t) => t.coinbase
     ? 'Coinbase (récompense du bloc)'
@@ -94,7 +95,7 @@ const scene3d = window.Block3D?.create($('#scene'), {
       : `${short(t.txid, 12, 8)}\n${t.rate.toFixed(1)} sat/vB · ${nf.format(t.vsize)} vB\nfrais ${nf.format(t.fee)} sats`,
   onPick: (t) => openTx(t.txid),
   onFocus: (id) => focusSlot(id),
-});
+}) ?? null; } catch (e) { console.warn('3D scene unavailable (no WebGL?)', e); scene3d = null; }
 if (!scene3d) stage.hidden = true; // Three.js not loaded (offline / CDN blocked)
 else {
   $('#rotate').addEventListener('change', (e) => scene3d.setAutoRotate(e.target.checked));
@@ -129,12 +130,17 @@ async function loadBlockTxs(b) {
 const txCache = new Map();
 const RETRY_MS = 8000, MAX_RETRY = 8;   // retry while the block only has provisional data
 const retryTimers = new Map(), retryCount = new Map();
+// Does the 3D scene currently want the full detail of this block? (recent, or selected)
+function wantsDetail(b) {
+  const i = state.blocks.findIndex((x) => x.id === b.id);
+  return i >= 0 && i < SHOWN && (i < DETAIL || b.id === state.focusId);
+}
 function scheduleRetry(b) {
   if (retryTimers.has(b.id) || (retryCount.get(b.id) || 0) >= MAX_RETRY) return;
   retryTimers.set(b.id, setTimeout(() => {
     retryTimers.delete(b.id);
     retryCount.set(b.id, (retryCount.get(b.id) || 0) + 1);
-    if (!state.blocks.slice(0, SHOWN).some((x) => x.id === b.id)) return; // the block is no longer shown
+    if (!wantsDetail(b)) return; // the block is no longer shown in detail
     txCache.delete(b.id);
     loadSlot(b);
   }, RETRY_MS));
@@ -143,6 +149,7 @@ async function loadSlot(b) {
   if (!txCache.has(b.id)) txCache.set(b.id, loadBlockTxs(b));
   try {
     const txs = await txCache.get(b.id);
+    if (!wantsDetail(b)) { txCache.delete(b.id); return; } // demoted/removed while loading: don't rebuild the detail
     scene3d.setTxs(b.id, txs);
     setSceneMsg('');
     if (txs.approx) scheduleRetry(b);
@@ -191,8 +198,9 @@ function applyProjected(pb) {
 }
 function pushProjected() {
   projTimer = 0;
-  if (!scene3d || !proj || !proj.size) return;
+  if (!scene3d || !proj) return;
   projShown = true;
+  if (!proj.size) { projFresh.clear(); scene3d.setTxs(NEXT_ID, null); return; } // empty projection: clear stale towers
   const incoming = [...projFresh].filter((id) => proj.has(id));
   projFresh.clear();
   scene3d.setTxs(NEXT_ID, [...proj.values()], incoming);
@@ -257,8 +265,9 @@ function pushTxs(list) {
   }
   if (scene3d && fresh.length) scene3d.stream(fresh);
   if (txBuffer.length > 1000) txBuffer.splice(0, txBuffer.length - 1000); // long pause: keep only the most recent
-  if (state.seen.size > 20000) { // bounded memory: keep only what is displayed
-    state.seen = new Set([...state.txs.map((t) => t.txid), ...txBuffer.map((t) => t.txid)]);
+  if (state.seen.size > 20000) { // bounded memory: forget the oldest ids first (a Set iterates in insertion order)
+    let drop = state.seen.size - 15000;
+    for (const id of state.seen) { if (drop-- <= 0) break; state.seen.delete(id); }
   }
 }
 
@@ -303,6 +312,7 @@ function connect() {
   ws.onopen = () => {
     retry = 0;
     setStatus(true);
+    refreshBlocks().catch((e) => console.warn('blocks', e)); // backfill blocks mined while offline
     ws.send(JSON.stringify({ action: 'want', data: ['blocks', 'mempool-blocks', 'mempool-txids'] }));
     ws.send(JSON.stringify({ 'track-mempool-block': 0 })); // next block contents, for the 3D scene
   };
@@ -325,7 +335,11 @@ function connect() {
 const dialog = $('#detail');
 const body = $('#detail-body');
 $('#close').onclick = () => dialog.close();
-dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
+dialog.addEventListener('click', (e) => { // close on backdrop click only (not on the dialog's own padding)
+  if (e.target !== dialog) return;
+  const r = dialog.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialog.close();
+});
 
 function show(...nodes) {
   body.replaceChildren(...nodes.flat()); // flatten arrays (e.g. a list of transactions)
@@ -347,10 +361,13 @@ function txCard(tx, linked = true) {
       el('div', {}, el('b', {}, `Sorties (${tx.vout.length})`), el('ul', {}, outputs.slice(0, 20)))));
 }
 
+let detailSeq = 0; // only the latest detail request may update the dialog
 async function openTx(txid) {
+  const mine = ++detailSeq;
   show(el('p', { class: 'muted' }, 'Chargement…'));
   try {
     const tx = await api(`/tx/${txid}`);
+    if (mine !== detailSeq) return;
     const st = tx.status;
     const out = tx.vout.reduce((s, o) => s + o.value, 0);
     show(el('h2', {}, 'Transaction'), fields([
@@ -362,13 +379,15 @@ async function openTx(txid) {
       ['Frais', tx.fee != null ? `${nf.format(tx.fee)} sats (${(tx.fee / (tx.weight / 4)).toFixed(1)} sat/vB)` : '—'],
       ['Taille', `${nf.format(tx.size)} o · ${nf.format(Math.ceil(tx.weight / 4))} vB`],
     ]), txCard(tx, false));
-  } catch (e) { show(el('p', {}, `Transaction introuvable (${e.message})`)); }
+  } catch (e) { if (mine === detailSeq) show(el('p', {}, `Transaction introuvable (${e.message})`)); }
 }
 
 async function openBlock(hash) {
+  const mine = ++detailSeq;
   show(el('p', { class: 'muted' }, 'Chargement…'));
   try {
     const [b, txs] = await Promise.all([api(`/block/${hash}`), api(`/block/${hash}/txs`)]);
+    if (mine !== detailSeq) return;
     show(el('h2', {}, `Bloc #${nf.format(b.height)}`), fields([
       ['Hash', el('span', { class: 'mono' }, b.id)],
       ['Date', `${date(b.timestamp)} (${ago(b.timestamp)})`],
@@ -376,9 +395,9 @@ async function openBlock(hash) {
       ['Taille', `${(b.size / 1e6).toFixed(2)} Mo · ${(b.weight / 1e6).toFixed(2)} MWU`],
       ['Mineur', b.extras?.pool?.name ?? '—'],
       ['Frais médian', b.extras ? `${b.extras.medianFee.toFixed(1)} sat/vB` : '—'],
-      ['Bloc précédent', el('button', { class: 'link mono', onclick: () => openBlock(b.previousblockhash) }, short(b.previousblockhash, 16, 8))],
+      ...(b.previousblockhash ? [['Bloc précédent', el('button', { class: 'link mono', onclick: () => openBlock(b.previousblockhash) }, short(b.previousblockhash, 16, 8))]] : []), // absent for the genesis block
     ]), el('h3', {}, `Premières transactions (${txs.length} / ${nf.format(b.tx_count)})`), txs.map((t) => txCard(t)));
-  } catch (e) { show(el('p', {}, `Bloc introuvable (${e.message})`)); }
+  } catch (e) { if (mine === detailSeq) show(el('p', {}, `Bloc introuvable (${e.message})`)); }
 }
 
 // ---------- search ----------
@@ -399,16 +418,29 @@ $('#search').addEventListener('submit', async (e) => {
 });
 
 // ---------- startup ----------
+// Merge the latest blocks into the state (startup, and backfill after a WebSocket reconnect).
+async function refreshBlocks() {
+  const list = await api('/v1/blocks');
+  const byId = new Map([...list, ...state.blocks].map((b) => [b.id, b]));
+  const merged = [...byId.values()].sort((x, y) => y.height - x.height).slice(0, MAX_BLOCKS);
+  if (merged.length === state.blocks.length && merged.every((b, i) => b.id === state.blocks[i].id)) return; // nothing new
+  const first = !state.blocks.length;
+  state.blocks = merged;
+  renderBlocks();
+  if (!scene3d) return;
+  if (first) setSceneMsg('Chargement des transactions…'); else resetProjected();
+  syncScene();
+  if (first || $('#follow').checked) focusSlot(state.blocks[0].id, true);
+}
+function loadBlocks(attempt = 0) { // retries with a growing delay if the API is unavailable at startup
+  refreshBlocks().catch((e) => {
+    console.warn('blocks', e);
+    setTimeout(() => loadBlocks(attempt + 1), Math.min(30000, 2000 * 2 ** attempt));
+  });
+}
+
 async function init() {
-  try {
-    state.blocks = (await api('/v1/blocks')).slice(0, MAX_BLOCKS);
-    renderBlocks();
-    if (scene3d && state.blocks.length) {
-      setSceneMsg('Chargement des transactions…');
-      syncScene();
-      focusSlot(state.blocks[0].id, true);
-    }
-  } catch (e) { console.warn('blocks', e); }
+  loadBlocks();
   connect();
   pollRecent();
   setInterval(pollRecent, POLL_MS);

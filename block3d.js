@@ -51,7 +51,7 @@
   }
 
   function create(container, opts = {}) {
-    if (typeof THREE === 'undefined') return null;
+    if (typeof THREE === 'undefined' || !THREE.OrbitControls) return null; // core or required add-on script missing
 
     const tmpB = new THREE.Color();
     function rateColor(rate, out) {
@@ -162,7 +162,15 @@
       if (!slot.mesh) return;
       slot.group.remove(slot.mesh); slot.mesh.material.dispose(); slot.mesh.dispose && slot.mesh.dispose();
       slot.mesh = null;
-      if (hover && hover.slot === slot) hover = null;
+      dropHover(slot);
+    }
+
+    // The hovered instance index is meaningless once the mesh is rebuilt: clear hover, tooltip and cursor.
+    function dropHover(slot) {
+      if (!hover || hover.slot !== slot) return;
+      hover = null;
+      canvas.style.cursor = 'grab';
+      hideTip();
     }
 
     function removeSlot(slot) {
@@ -208,7 +216,7 @@
         const from = new THREE.Vector3(Math.cos(ang) * rad, FRAME_H + 22 + Math.random() * 10, Math.sin(ang) * rad);
         const to = new THREE.Vector3(r.x + r.w / 2 - SIZE / 2, side / 2, r.y + r.h / 2 - SIZE / 2);
         slot.group.add(mesh);
-        slot.arrivals.push({ k, mesh, from, to, delay: n * ARRIVAL_GAP, t: 0, landed: false, popT: 0 });
+        slot.arrivals.push({ txid: id, k, mesh, from, to, delay: n * ARRIVAL_GAP, t: 0, landed: false, popT: 0 });
         setTower(slot, k, 0); // the tower doesn't exist yet: it pops up on landing
         n++;
       }
@@ -276,9 +284,16 @@
     }
 
     function buildMesh(slot, animate, incoming) {
-      disposeMesh(slot);
+      // In-flight arrival particles survive a rebuild (re-anchored by txid below); everything else is reset.
+      const carried = animate ? [] : slot.arrivals.filter((a) => !a.landed);
+      slot.arrivals = slot.arrivals.filter((a) => !carried.includes(a));
+      clearArrivals(slot);
+      disposeLite(slot);
       const txs = slot.txs;
-      if (!txs || !txs.length) { slot.list = []; return; }
+      if (!txs || !txs.length) {
+        for (const a of carried) { slot.group.remove(a.mesh); a.mesh.material.dispose(); }
+        disposeMesh(slot); slot.list = []; return;
+      }
       // The coinbase is a fixed-size square pillar in a corner; the other txs share the rest of the platform.
       // Scale: a full block (~1 Mvb) fills everything, an almost empty block leaves most of it free (otherwise a
       // lone coinbase, or 2-3 big txs, would become a giant block). Provisional data (vsize=1): the whole platform.
@@ -289,22 +304,48 @@
       slot.list = cb.concat(rest);
       slot.rects = cb.map(() => ({ x: 0, y: 0, w: COINBASE_SIDE, h: COINBASE_SIDE })).concat(laid.map((r) => ({ x: r.x, y: r.y + lane, w: r.w, h: r.h })));
       slot.heights = slot.list.map((x) => (x.coinbase ? FRAME_H - 1 : towerHeight(x.rate)));
-      const material = new THREE.MeshStandardMaterial({ metalness: 0.35, roughness: 0.4 });
-      if (slot.kind === 'next') { material.transparent = true; material.opacity = 0.82; }
-      const mesh = slot.mesh = new THREE.InstancedMesh(unitBox, material, slot.list.length);
-      mesh.frustumCulled = false; // the unit box sits at the origin: culling would make it disappear
-      slot.base = new Float32Array(slot.list.length * 3);
+      const n = slot.list.length;
+      // Reuse the GPU buffers when the existing mesh is big enough (frequent projected-block updates): only
+      // matrices and colors are rewritten. The capacity has headroom so growing blocks rarely reallocate.
+      let mesh = slot.mesh;
+      if (mesh && mesh.userData.cap >= n && mesh.userData.cap <= n * 2) {
+        dropHover(slot);
+        mesh.count = n;
+      } else {
+        disposeMesh(slot);
+        const material = new THREE.MeshStandardMaterial({ metalness: 0.35, roughness: 0.4 });
+        if (slot.kind === 'next') { material.transparent = true; material.opacity = 0.82; }
+        const cap = Math.ceil(n * 1.25);
+        mesh = slot.mesh = new THREE.InstancedMesh(unitBox, material, cap);
+        mesh.userData.cap = cap;
+        mesh.count = n;
+        mesh.frustumCulled = false; // the unit box sits at the origin: culling would make it disappear
+        slot.group.add(mesh);
+      }
+      slot.base = new Float32Array(n * 3);
       const c = new THREE.Color();
       slot.list.forEach((x, k) => {
         if (x.coinbase) c.setHex(0xffd76a).multiplyScalar(1.5); else rateColor(x.rate, c);
         c.toArray(slot.base, k * 3);
         mesh.setColorAt(k, c);
       });
-      slot.group.add(mesh);
+      mesh.instanceColor.needsUpdate = true;
       slot.t = animate ? 0 : STAGGER + GROW;
       slot.growing = !!animate;
       if (animate) slot.shock = 0.0001;
       writeMatrices(slot);
+      // re-anchor in-flight particles on their (possibly moved) tower; drop those whose tx left the block
+      const index = new Map(slot.list.map((x, k) => [x.txid, k]));
+      for (const a of carried) {
+        const k = index.get(a.txid);
+        if (k === undefined) { slot.group.remove(a.mesh); a.mesh.material.dispose(); continue; }
+        const r = slot.rects[k];
+        a.k = k;
+        a.to.set(r.x + r.w / 2 - SIZE / 2, a.mesh.scale.y / 2, r.y + r.h / 2 - SIZE / 2);
+        slot.arrivals.push(a);
+        setTower(slot, k, 0);
+      }
+      if (carried.length) mesh.instanceMatrix.needsUpdate = true;
       if (!animate && incoming && incoming.length && !reduceMotion) spawnArrivals(slot, incoming);
     }
 
