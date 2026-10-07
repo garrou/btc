@@ -1,4 +1,9 @@
+// Scrollbars: the native ones are hidden and replaced by
+//  - arrows (and edge fades) for the row of blocks,
+//  - a slim draggable thumb for the vertical areas (transaction feed, detail dialog).
 (() => {
+  'use strict';
+
   function arrows(wrap) {
     const scroller = wrap.querySelector('.chain');
     const prev = wrap.querySelector('.nav-prev'), next = wrap.querySelector('.nav-next');
@@ -37,6 +42,7 @@
     new ResizeObserver(update).observe(scroller);
     new MutationObserver(update).observe(scroller, { childList: true, subtree: true });
     thumb.addEventListener('pointerdown', (e) => {
+      if (host.classList.contains('drag')) return;
       e.preventDefault();
       thumb.setPointerCapture(e.pointerId);
       host.classList.add('drag');
@@ -45,9 +51,13 @@
         const range = scroller.clientHeight - thumb.offsetHeight;
         if (range > 0) scroller.scrollTop = top0 + ((ev.clientY - y0) * (scroller.scrollHeight - scroller.clientHeight)) / range;
       };
-      const up = () => { host.classList.remove('drag'); thumb.removeEventListener('pointermove', move); thumb.removeEventListener('pointerup', up); };
-      thumb.addEventListener('pointermove', move);
-      thumb.addEventListener('pointerup', up);
+      // the drag also ends when the browser cancels the pointer (touch gesture, window blur) or takes the capture away
+      const end = () => {
+        host.classList.remove('drag');
+        for (const type of ['pointermove', 'pointerup', 'pointercancel', 'lostpointercapture']) thumb.removeEventListener(type, handlers[type]);
+      };
+      const handlers = { pointermove: move, pointerup: end, pointercancel: end, lostpointercapture: end };
+      for (const [type, fn] of Object.entries(handlers)) thumb.addEventListener(type, fn);
     });
     update();
   }

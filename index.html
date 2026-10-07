@@ -70,23 +70,6 @@
       </div>
     </section>
 
-    <section class="miners" id="miners">
-      <h2>Mineurs
-        <small>chaque pool tente des hash ; le premier sous la cible gagne le bloc (schéma symbolique)</small>
-      </h2>
-      <div class="miners-box">
-        <canvas aria-label="Schéma des mineurs : chaque point est un hash essayé"></canvas>
-        <div class="miners-info">
-          <div class="m-stat"><span class="k">Cible</span><code data-m="target">—</code></div>
-          <div class="m-stat"><span class="k">Dernier essai</span><code data-m="attempt">—</code></div>
-          <div class="m-stat"><span class="k">Hashes tentés (depuis l'ouverture)</span><b data-m="hashes">—</b></div>
-          <div class="m-stat"><span class="k">1 point ≈</span><b data-m="unit">—</b></div>
-        </div>
-        <div class="m-banner" data-m="banner">En attente du prochain bloc…</div>
-        <div class="m-chain" data-m="chain"></div>
-      </div>
-    </section>
-
     <section>
       <h2>Blocs <small>prochain bloc (projection du mempool) → minés · clic = aller à ce bloc en 3D, double-clic =
           détails</small></h2>
@@ -134,8 +117,40 @@
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-  <script defer src="js/block3d.js"></script>
-  <script defer src="js/ui.js"></script>
+  <!-- pure logic: no DOM, no network -->
+  <script defer src="js/core/config.js"></script>
+  <script defer src="js/core/format.js"></script>
+  <script defer src="js/core/colors.js"></script>
+  <script defer src="js/core/treemap.js"></script>
+  <script defer src="js/core/txs.js"></script>
+  <script defer src="js/core/blocks.js"></script>
+  <script defer src="js/core/projection.js"></script>
+  <script defer src="js/core/feed.js"></script>
+  <script defer src="js/core/stats.js"></script>
+  <script defer src="js/core/search.js"></script>
+  <!-- data sources -->
+  <script defer src="js/data/api.js"></script>
+  <script defer src="js/data/socket.js"></script>
+  <!-- state -->
+  <script defer src="js/state/store.js"></script>
+  <!-- 3D view -->
+  <script defer src="js/scene/scene3d.js"></script>
+  <!-- DOM views -->
+  <script defer src="js/ui/dom.js"></script>
+  <script defer src="js/ui/scroll.js"></script>
+  <script defer src="js/ui/blocks-row.js"></script>
+  <script defer src="js/ui/hud.js"></script>
+  <script defer src="js/ui/detail.js"></script>
+  <script defer src="js/ui/feed.js"></script>
+  <script defer src="js/ui/stats-bar.js"></script>
+  <!-- orchestration -->
+  <script defer src="js/controllers/scene-sync.js"></script>
+  <script defer src="js/controllers/navigation.js"></script>
+  <script defer src="js/controllers/details.js"></script>
+  <script defer src="js/controllers/search.js"></script>
+  <script defer src="js/controllers/feed.js"></script>
+  <script defer src="js/controllers/stats.js"></script>
+  <!-- entry point -->
   <script defer src="js/app.js"></script>
 </body>
 

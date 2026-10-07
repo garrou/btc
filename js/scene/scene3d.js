@@ -1,74 +1,28 @@
-// Multi-block 3D scene: the next block (projection) followed by the latest mined blocks, in a row.
-// Each transaction is a tower standing on its block's platform:
-//   footprint = size (vsize, treemap: largest txs first)   height + color = fee rate (sat/vB)
-// Depends on the global THREE scripts (r147); EffectComposer/UnrealBloomPass are optional.
+// Three.js view of the blocks: the next block (projection) followed by the mined blocks, in a row.
+// Each transaction is a tower on its block's platform: footprint = size, height + color = fee rate.
+// Rendering only: the layout, colors and heights come from core/ (pure functions); this file knows nothing about the
+// app state or the network. Depends on the global THREE scripts (r147); EffectComposer/UnrealBloomPass are optional.
 (function () {
   'use strict';
+  const BTC = (window.BTC = window.BTC || {});
+  const S = BTC.config.scene;
 
-  const SIZE = 40;          // side of a block's platform
-  const PITCH = 60;         // distance between two blocks
-  const FRAME_H = 16;       // height of the cage
-  const COINBASE_SIDE = 3;  // side of the coinbase pillar
-  // Layout order of the towers (selectable in the UI): 'txid' = by transaction id (neutral: unrelated to size and fee,
-  // stable when txs come and go), 'api' = the order given by mempool.space (already sorted by fee rate),
-  // 'size' = largest first (squarer shapes, reshuffles on every change)
-  const ORDERS = ['txid', 'api', 'size'];
-  const BLOCK_VSIZE = 1e6;  // block capacity (vB): reference for the footprint scale
+  const { size: SIZE, pitch: PITCH, frameH: FRAME_H } = S;
   const GROW = 0.7;         // tower growth duration (s)
   const STAGGER = 0.9;      // spread of the start times (s)
-  const STOPS = [[1, 0x2d3a9e], [4, 0x1f8fe0], [10, 0x22c9a6], [25, 0x7ddc4a], [60, 0xf2d33c], [120, 0xf7931a], [250, 0xff3d6e]];
   const MAX_ARRIVALS = 80;  // animated arrivals per update (the rest appear directly)
-  const MAX_STREAM = 200;    // stream particles in flight/pending (txs arriving in the mempool)
+  const MAX_STREAM = 200;   // stream particles in flight/pending (txs arriving in the mempool)
   const MORPH = 0.8;        // towers glide to their new place when a block is re-laid out (s)
   const ARRIVAL_GAP = 0.03; // delay between two arrivals (s)
   const FLIGHT = 1.2;       // fall duration (s)
   const POP = 0.35;         // tower pop duration on landing (s)
   const FLASH = 0.7;        // white flash duration (s)
-  const THEME = { mined: 0xf7931a, next: 0x4cc9f0 };
-
-  // Squarified treemap: vals (>0) -> rectangles whose area is proportional to the value.
-  // capacity: reference total for the area scale (≥ sum of values); a sparsely filled block leaves empty space
-  function treemap(vals, W, H, capacity) {
-    const k = (W * H) / Math.max(capacity || 0, vals.reduce((s, v) => s + v, 0));
-    const out = new Array(vals.length);
-    let x = 0, y = 0, w = W, h = H, i = 0;
-    while (i < vals.length) {
-      const side = Math.min(w, h);
-      let sum = 0, mx = 0, mn = Infinity, prev = Infinity, j = i;
-      for (; j < vals.length; j++) {
-        const a = vals[j] * k, s2 = sum + a, nmx = Math.max(mx, a), nmn = Math.min(mn, a);
-        const worst = Math.max((side * side * nmx) / (s2 * s2), (s2 * s2) / (side * side * nmn));
-        if (j > i && worst > prev) break;
-        sum = s2; mx = nmx; mn = nmn; prev = worst;
-      }
-      const thick = sum / side;
-      let off = 0;
-      if (w >= h) {
-        for (let m = i; m < j; m++) { const len = (vals[m] * k) / thick; out[m] = { x, y: y + off, w: thick, h: len }; off += len; }
-        x += thick; w -= thick;
-      } else {
-        for (let m = i; m < j; m++) { const len = (vals[m] * k) / thick; out[m] = { x: x + off, y, w: len, h: thick }; off += len; }
-        y += thick; h -= thick;
-      }
-      i = j;
-    }
-    return out;
-  }
+  const THEME = { mined: BTC.colors.MINED_BLOCK_HEX, next: BTC.colors.NEXT_BLOCK_HEX };
 
   function create(container, opts = {}) {
     if (typeof THREE === 'undefined' || !THREE.OrbitControls) return null; // core or required add-on script missing
 
-    const tmpB = new THREE.Color();
-    function rateColor(rate, out) {
-      const r = Math.max(1, rate);
-      let i = 0;
-      while (i < STOPS.length - 2 && r > STOPS[i + 1][0]) i++;
-      const [a, ca] = STOPS[i], [b, cb] = STOPS[i + 1];
-      const t = Math.min(1, Math.max(0, (Math.log(r) - Math.log(a)) / (Math.log(b) - Math.log(a))));
-      out.setHex(ca).lerp(tmpB.setHex(cb), t);
-      return out.multiplyScalar(0.75 + Math.min(0.55, Math.log10(r + 1) * 0.3)); // >1: makes the bloom "glow"
-    }
-    const towerHeight = (rate) => 0.6 + 12 * (Math.log(1 + Math.min(rate, 300)) / Math.log(301));
+    const colorOf = (rgb, out = new THREE.Color()) => out.setRGB(rgb[0], rgb[1], rgb[2]);
 
     // ----- shared scene -----
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -245,7 +199,7 @@
     function streamInto(slot, items) {
       for (const it of items) {
         if (slot.stream.length >= MAX_STREAM) break;
-        const color = new THREE.Color(it.rate != null ? rateColor(it.rate, new THREE.Color()) : 0x4cc9f0).multiplyScalar(1.6);
+        const color = (it.rate != null ? colorOf(BTC.colors.rate(it.rate)) : new THREE.Color(BTC.colors.NEXT_BLOCK_HEX)).multiplyScalar(1.6);
         const mesh = new THREE.Mesh(cubeGeo, new THREE.MeshBasicMaterial({ color, fog: false }));
         const side = 0.7 + Math.random() * 0.6;
         mesh.scale.setScalar(side);
@@ -301,7 +255,7 @@
       s.arrivals = s.arrivals.filter((a) => !(a.landed && a.popT > FLASH));
     }
 
-    let layoutOrder = 'txid';
+    let layoutOrder = BTC.config.defaultOrder;
 
     function buildMesh(slot, animate, incoming) {
       // In-flight arrival particles survive a rebuild (re-anchored by txid below); everything else is reset.
@@ -314,21 +268,14 @@
         for (const a of carried) { slot.group.remove(a.mesh); a.mesh.material.dispose(); }
         disposeMesh(slot); slot.list = []; slot.growing = false; return;
       }
-      // The coinbase is a fixed-size square pillar in a corner; the other txs share the rest of the platform.
-      // Scale: a full block (~1 Mvb) fills everything, an almost empty block leaves most of it free (otherwise a
-      // lone coinbase, or 2-3 big txs, would become a giant block). Provisional data (vsize=1): the whole platform.
-      const cb = txs.filter((x) => x.coinbase), rest = txs.filter((x) => !x.coinbase);
-      if (layoutOrder === 'size') rest.sort((a, b) => b.vsize - a.vsize);
-      else if (layoutOrder === 'txid') rest.sort((a, b) => (a.txid < b.txid ? -1 : a.txid > b.txid ? 1 : 0));
-      const lane = cb.length ? COINBASE_SIDE : 0;
-      const sum = rest.reduce((s, x) => s + Math.max(1, x.vsize), 0);
-      const laid = rest.length ? treemap(rest.map((x) => Math.max(1, x.vsize)), SIZE, SIZE - lane, txs.approx ? sum : BLOCK_VSIZE) : [];
       // previous footprints by txid, to glide towers to their new place (only for an in-place update of a shown block)
       const prev = !animate && !reduceMotion && slot.mesh && slot.list.length
         ? new Map(slot.list.map((x, k) => [x.txid, { r: slot.rects[k], h: slot.heights[k] }])) : null;
-      slot.list = cb.concat(rest);
-      slot.rects = cb.map(() => ({ x: 0, y: 0, w: COINBASE_SIDE, h: COINBASE_SIDE })).concat(laid.map((r) => ({ x: r.x, y: r.y + lane, w: r.w, h: r.h })));
-      slot.heights = slot.list.map((x) => (x.coinbase ? FRAME_H - 1 : towerHeight(x.rate)));
+      const layout = BTC.layout.block(txs, layoutOrder); // pure computation (core/treemap.js)
+      slot.list = layout.list;
+      slot.rects = layout.rects;
+      slot.heights = layout.heights;
+      slot.base = layout.colors;
       const n = slot.list.length;
       // Reuse the GPU buffers when the existing mesh is big enough (frequent projected-block updates): only
       // matrices and colors are rewritten. The capacity has headroom so growing blocks rarely reallocate.
@@ -347,13 +294,8 @@
         mesh.frustumCulled = false; // the unit box sits at the origin: culling would make it disappear
         slot.group.add(mesh);
       }
-      slot.base = new Float32Array(n * 3);
       const c = new THREE.Color();
-      slot.list.forEach((x, k) => {
-        if (x.coinbase) c.setHex(0xffd76a).multiplyScalar(1.5); else rateColor(x.rate, c);
-        c.toArray(slot.base, k * 3);
-        mesh.setColorAt(k, c);
-      });
+      for (let k = 0; k < n; k++) mesh.setColorAt(k, c.fromArray(slot.base, k * 3));
       mesh.instanceColor.needsUpdate = true;
       slot.t = animate ? 0 : STAGGER + GROW;
       slot.growing = !!animate;
@@ -548,13 +490,21 @@
       composer ? composer.render() : renderer.render(scene, camera);
     })(last);
 
+    // Public API (everything the controllers need; no app state leaks in)
     return {
+      /** metas: [{ id, kind: 'next' | 'mined', label }] from left to right. Slots no longer listed are removed. */
       setSlots(metas) {
         const keep = new Set(metas.map((m) => m.id));
         for (const s of [...slots.values()]) if (!keep.has(s.id)) removeSlot(s);
         metas.forEach((m, i) => { (slots.get(m.id) || makeSlot(m)).targetX = i * PITCH; });
         syncLinks(metas);
       },
+      /** Number of transactions (towers) a slot currently displays; 0 for an empty or unknown slot. */
+      txCount(id) { const s = slots.get(id); return s && s.txs ? s.txs.length : 0; },
+      /**
+       * Content of a slot: array of txs (same reference = nothing to do), or null to clear. Growth animation on the
+       * first fill. incoming: txids that just entered the block (later updates) -> arrival animation.
+       */
       setTxs(id, txs, incoming) {
         const s = slots.get(id);
         if (!s || s.txs === txs) return;
@@ -562,28 +512,31 @@
         s.txs = txs;
         buildMesh(s, first, incoming);
       },
+      /** items: [{ rate? }], transactions that just entered the mempool: they fall toward the next block. */
       stream(items) {
         if (reduceMotion || !visible) return;
         for (const s of slots.values()) if (s.kind === 'next') streamInto(s, items);
       },
+      /** Light version of an old block (no per-tx detail): a solid block, high according to its fullness, colored by median fee. */
       setSummary(id, { fill, rate }) {
         const s = slots.get(id);
         if (!s || s.mesh) return;
         disposeLite(s);
         const h = Math.max(0.8, Math.min(1, fill) * (FRAME_H - 2));
-        const m = new THREE.Mesh(unitBox, new THREE.MeshStandardMaterial({ color: rateColor(rate ?? 2, new THREE.Color()), metalness: 0.35, roughness: 0.5, transparent: true, opacity: 0.85 }));
+        const m = new THREE.Mesh(unitBox, new THREE.MeshStandardMaterial({ color: colorOf(BTC.colors.rate(rate ?? 2)), metalness: 0.35, roughness: 0.5, transparent: true, opacity: 0.85 }));
         m.scale.set(SIZE - 3, h, SIZE - 3);
         s.group.add(m); s.lite = m;
       },
+      /** The camera follows this slot. */
       focus(id) { focusId = id; },
       // Change the layout order: every displayed block is re-laid out, towers glide to their new place.
       setOrder(mode) {
-        if (!ORDERS.includes(mode) || mode === layoutOrder) return;
+        if (!BTC.config.orders.includes(mode) || mode === layoutOrder) return;
         layoutOrder = mode;
         for (const s of slots.values()) if (s.txs && s.mesh) buildMesh(s, false, null);
       },
     };
   }
 
-  window.Block3D = { create };
+  BTC.scene3d = { create };
 })();
