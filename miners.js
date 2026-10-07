@@ -1,15 +1,13 @@
 // Mining schematic: mining pools race to find a hash below the target. Symbolic, not real hashing:
 //   - each pool is a lane; its dots are hash attempts, emitted at a rate proportional to its share of the hashrate
 //   - a dot that reaches the gate is a rejected hash (hash >= target); the winner is a gold dot that passes through
-//   - "Live" mode follows the real blocks (the real pool wins); "Demo" draws a block every few seconds with the
-//     real pool shares as probabilities (a Poisson process, like real mining but ~60x faster)
+//   - only real blocks are shown: when a block is announced, its real pool wins (nothing is simulated or extrapolated)
 (() => {
   const PALETTE = ['#f7931a', '#4cc9f0', '#7ddc4a', '#c77dff', '#ff3d6e', '#f2d33c', '#22c9a6', '#e07a5f'];
   const OTHERS_COLOR = '#6b7390';
   const MAX_ROWS = 8;               // top pools shown individually, the rest are grouped in "Autres"
   const DOTS_PER_S = 90;            // total dots per second (symbolic)
   const FLIGHT_S = 1.4;             // flight time of the winning dot
-  const DEMO_MEAN_S = 9, DEMO_MIN_S = 2.5;
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const hexChars = '0123456789abcdef';
@@ -26,9 +24,8 @@
     const el = { target: $('[data-m=target]'), hashes: $('[data-m=hashes]'), unit: $('[data-m=unit]'),
       attempt: $('[data-m=attempt]'), banner: $('[data-m=banner]'), chain: $('[data-m=chain]') };
 
-    let W = 0, H = 0, rows = [], hashrate = 0, zeros = 19, mode = 'live', visible = true;
-    let dots = [], sparks = [], gateFlash = 0, lastHeight = 0, demoTimer = 0, hashes = 0, tickAcc = 0;
-    let demoCount = 0;
+    let W = 0, H = 0, rows = [], hashrate = 0, zeros = 19, visible = true;
+    let dots = [], sparks = [], gateFlash = 0, hashes = 0, tickAcc = 0;
 
     // ----- pools -----
     // list: [{ name, share }] (any scale). Top MAX_ROWS pools + "Autres".
@@ -44,11 +41,6 @@
     function rowFor(name) {
       const n = (name || '').toLowerCase();
       return rows.find((r) => r.name.toLowerCase() === n) || rows.find((r) => r.others) || rows[0];
-    }
-    function pickWinner() { // weighted by share
-      let x = Math.random(), acc = 0;
-      for (const r of rows) { acc += r.share; if (x <= acc) return r; }
-      return rows[rows.length - 1];
     }
 
     // ----- layout -----
@@ -69,7 +61,7 @@
     function spawnWinner(info, row) {
       dots.push({ row, off: 0, x: -1, v: 0, win: true, info, t: 0 });
     }
-    function trigger(info) { // a block is found (real or simulated)
+    function trigger(info) { // a block is found
       if (!rows.length) { showFound(info); return; }
       const row = rowFor(info.pool);
       if (reduceMotion || !visible) { showFound(info, row); return; }
@@ -78,24 +70,22 @@
     function showFound(info, row) {
       gateFlash = 1;
       if (row) row.glow = 1;
-      lastHeight = Math.max(lastHeight, info.height || 0);
       el.banner.innerHTML = '';
       const b = document.createElement('b'); b.textContent = `✔ ${info.pool} a trouvé le bloc #${nf.format(info.height)}`;
       const s = document.createElement('span');
-      s.textContent = ` · nonce ${info.nonce != null ? nf.format(info.nonce) : '—'}${info.real ? '' : ' · simulation'}`;
+      s.textContent = ` · nonce ${info.nonce != null ? nf.format(info.nonce) : '—'}`;
       const c = document.createElement('code'); c.textContent = info.hash;
       el.banner.append(b, s, c);
       addChainItem(info, row);
     }
     function addChainItem(info, row) {
       const d = document.createElement('div');
-      d.className = `m-block${info.real ? '' : ' sim'}`;
+      d.className = 'm-block';
       d.style.setProperty('--c', (row || rowFor(info.pool) || { color: OTHERS_COLOR }).color);
       const h = document.createElement('b'); h.textContent = `#${nf.format(info.height)}`;
       const p = document.createElement('span'); p.textContent = info.pool;
       const code = document.createElement('code'); code.textContent = shortHash(info.hash);
       d.append(h, p, code);
-      if (!info.real) { const t = document.createElement('small'); t.textContent = 'simulé'; d.append(t); }
       el.chain.prepend(d);
       while (el.chain.children.length > 6) el.chain.lastElementChild.remove();
     }
@@ -103,39 +93,15 @@
       const z = (hash.match(/^0*/) || [''])[0].length;
       if (z > 0) zeros = z;
     }
-    // real block from the app (ignored in demo mode, where blocks are simulated)
+    // real block from the app
     function found(info) {
-      lastHeight = Math.max(lastHeight, info.height || 0);
       if (info.hash) setTargetFromHash(info.hash);
-      if (mode === 'live') trigger({ ...info, real: true });
+      trigger(info);
     }
     // recent real blocks, shown without animation (oldest first)
     function seed(list) {
-      for (const info of list) { addChainItem({ ...info, real: true }); lastHeight = Math.max(lastHeight, info.height || 0); if (info.hash) setTargetFromHash(info.hash); }
+      for (const info of list) { addChainItem(info); if (info.hash) setTargetFromHash(info.hash); }
     }
-
-    // ----- demo mode -----
-    function scheduleDemo() {
-      clearTimeout(demoTimer);
-      if (mode !== 'demo') return;
-      const wait = Math.max(DEMO_MIN_S, -Math.log(1 - Math.random()) * DEMO_MEAN_S); // exponential inter-block time
-      demoTimer = setTimeout(() => {
-        if (rows.length) {
-          const r = pickWinner();
-          demoCount++;
-          trigger({ pool: r.name === 'Autres' ? 'Autres pools' : r.name, height: lastHeight + demoCount, nonce: (Math.random() * 4294967296) >>> 0,
-            hash: '0'.repeat(zeros) + hex(64 - zeros), real: false });
-        }
-        scheduleDemo();
-      }, wait * 1000);
-    }
-    function setMode(m) {
-      mode = m;
-      root.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
-      demoCount = 0;
-      scheduleDemo();
-    }
-    root.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
     // ----- drawing -----
     function draw(dt) {
@@ -253,7 +219,7 @@
         const per = hashrate / DOTS_PER_S;
         if (per > 0) el.unit.textContent = `≈ 10${sup(Math.round(Math.log10(per)))} hashes/s`;
       },
-      found, seed, setMode,
+      found, seed,
     };
   }
 
