@@ -103,7 +103,6 @@
     const cageGeo = new THREE.BoxGeometry(SIZE, FRAME_H, SIZE);
     const cageEdges = new THREE.EdgesGeometry(cageGeo);
     const slabGeo = new THREE.BoxGeometry(SIZE + 2, 0.8, SIZE + 2);
-    const ringGeo = new THREE.RingGeometry(SIZE * 0.55, SIZE * 0.575, 96);
     const cubeGeo = new THREE.BoxGeometry(1, 1, 1);   // particle for an incoming transaction
     const dummy = new THREE.Object3D();
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -134,14 +133,12 @@
       cage.position.y = FRAME_H / 2; group.add(cage);
       const glass = new THREE.Mesh(cageGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.035, side: THREE.BackSide, depthWrite: false }));
       glass.position.y = FRAME_H / 2; group.add(glass);
-      const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
-      ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; group.add(ring);
       const label = labelSprite(meta.label, color);
       label.position.set(0, FRAME_H + 5, 0); group.add(label);
       group.position.y = 28; // new blocks "fall" into place
       scene.add(group);
-      const slot = { id: meta.id, kind: meta.kind, group, ring, cage, glass, targetX: 0, mesh: null, txs: null,
-        list: [], rects: [], heights: [], base: null, t: 0, growing: false, shock: 0, arrivals: [], stream: [], pulse: 0 };
+      const slot = { id: meta.id, kind: meta.kind, group, cage, glass, targetX: 0, mesh: null, txs: null,
+        list: [], rects: [], heights: [], base: null, t: 0, growing: false, arrivals: [], stream: [], pulse: 0 };
       slots.set(meta.id, slot);
       return slot;
     }
@@ -332,7 +329,6 @@
       mesh.instanceColor.needsUpdate = true;
       slot.t = animate ? 0 : STAGGER + GROW;
       slot.growing = !!animate;
-      if (animate) slot.shock = 0.0001;
       writeMatrices(slot);
       // re-anchor in-flight particles on their (possibly moved) tower; drop those whose tx left the block
       const index = new Map(slot.list.map((x, k) => [x.txid, k]));
@@ -475,7 +471,7 @@
           const q = (l.t - 0.9) / 1;
           l.packet.visible = q > 0 && q < 1;
           l.packet.position.set(half - 2 * half * Math.min(1, Math.max(0, q)), 0, 0);
-          if (q >= 1) { l.landed = true; a.pulse = 1; if (!a.shock) a.shock = 0.0001; }
+          if (q >= 1) { l.landed = true; a.pulse = 1; }
         }
       }
     }
@@ -502,12 +498,6 @@
         s.group.position.x += (s.targetX - s.group.position.x) * k;   // slides into place
         s.group.position.y += (0 - s.group.position.y) * Math.min(1, dt * 3.5); // fall
         if (s.growing && s.mesh) { s.t += dt; writeMatrices(s); if (s.t > STAGGER + GROW) s.growing = false; }
-        if (s.shock > 0) {
-          s.shock += dt / 1.4;
-          s.ring.scale.setScalar(0.6 + s.shock * 2.6);
-          s.ring.material.opacity = Math.max(0, 0.9 * (1 - s.shock));
-          if (s.shock >= 1) { s.shock = 0; s.ring.material.opacity = 0; }
-        }
         updateArrivals(s, dt);
         updateStream(s, dt);
         if (s.pulse > 0) { // the cage lights up on every landing
