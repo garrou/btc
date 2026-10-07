@@ -74,6 +74,7 @@ function addBlock(b) {
   if (state.blocks.some((x) => x.id === b.id)) return;
   state.blocks = [b, ...state.blocks].sort((x, y) => y.height - x.height).slice(0, MAX_BLOCKS);
   renderBlocks(b.id);
+  if (Date.now() - lastStats > 15000) refreshStats(); // a new block moves the retarget progress
   if (!scene3d) return;
   resetProjected(); // the next block is fully recomputed after every mined block
   syncScene();
@@ -417,6 +418,56 @@ $('#search').addEventListener('submit', async (e) => {
   } catch (err) { show(el('p', {}, `Introuvable (${err.message})`)); }
 });
 
+// ---------- network stats ----------
+// Hashrate/difficulty come from mempool.space. There is no public measurement of the network's power draw:
+// consumption is an ESTIMATE = hashrate x an assumed average fleet efficiency (J/TH).
+const J_PER_TH = 25;
+const fr = (n, d = 1) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+function duration(ms) {
+  const min = Math.max(0, ms) / 60000;
+  if (min < 90) return `${Math.round(min)} min`;
+  if (min < 48 * 60) return `${Math.round(min / 60)} h`;
+  return `${fr(min / 1440, 1)} j`;
+}
+function setStat(id, html) { $(`#${id}`).innerHTML = html; }
+
+async function refreshStats() {
+  lastStats = Date.now();
+  const [hr, adj] = await Promise.allSettled([api('/v1/mining/hashrate/3d'), api('/v1/difficulty-adjustment')]);
+  if (hr.status === 'fulfilled') {
+    const series = (hr.value.hashrates || []).map((p) => num(p.avgHashrate)).filter((v) => v != null);
+    const hashrate = num(hr.value.currentHashrate) ?? series.at(-1) ?? null; // H/s
+    const difficulty = num(hr.value.currentDifficulty) ?? num(hr.value.difficulty?.at?.(-1)?.difficulty);
+    if (hashrate) {
+      const gw = (hashrate / 1e12) * J_PER_TH / 1e9; // TH/s x J/TH = W
+      setStat('st-hash', `${fr(hashrate / 1e18)}<em>EH/s</em>`);
+      setStat('st-power', `≈ ${fr(gw)}<em>GW</em>`);
+      setStat('st-power-sub', `≈ ${fr(gw * 8.76, 0)} TWh/an · estimation à ${J_PER_TH} J/TH`);
+      $('#st-power-box').title = `Estimation : hashrate × ${J_PER_TH} J/TH (efficacité moyenne supposée du parc de machines).`;
+    }
+    if (difficulty) setStat('st-diff', `${fr(difficulty / 1e12, 2)}<em>T</em>`);
+    if (series.length > 1) {
+      const lo = Math.min(...series), hi = Math.max(...series), span = hi - lo || 1;
+      $('#st-spark polyline').setAttribute('points', series.map((v, i) => `${(i / (series.length - 1)) * 100},${22 - ((v - lo) / span) * 20}`).join(' '));
+    }
+  } else console.warn('hashrate', hr.reason);
+  if (adj.status === 'fulfilled') {
+    const a = adj.value, change = num(a.difficultyChange), pct = num(a.progressPercent);
+    if (change != null) {
+      const el = $('#st-adj');
+      el.className = change >= 0 ? 'up' : 'down';
+      el.innerHTML = `${change >= 0 ? '+' : ''}${fr(change)}<em>%</em>`;
+    }
+    const left = num(a.remainingTime), blocks = num(a.remainingBlocks);
+    if (left != null && blocks != null) setStat('st-adj-sub', `dans ~${duration(left)} · ${nf.format(blocks)} blocs`);
+    if (pct != null) $('#st-adj-bar').style.width = `${Math.min(100, Math.max(0, pct))}%`;
+    const prev = num(a.previousRetarget);
+    if (prev != null) setStat('st-diff-sub', `dernier ajustement ${prev >= 0 ? '+' : ''}${fr(prev)} %`);
+  } else console.warn('difficulty adjustment', adj.reason);
+}
+let lastStats = 0;
+
 // ---------- startup ----------
 // Merge the latest blocks into the state (startup, and backfill after a WebSocket reconnect).
 async function refreshBlocks() {
@@ -441,6 +492,8 @@ function loadBlocks(attempt = 0) { // retries with a growing delay if the API is
 
 async function init() {
   loadBlocks();
+  refreshStats();
+  setInterval(refreshStats, 60000);
   connect();
   pollRecent();
   setInterval(pollRecent, POLL_MS);

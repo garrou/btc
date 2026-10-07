@@ -173,3 +173,20 @@ button { transition: border-color .15s, background .15s; }
 button:hover { background: #222636; }
 dialog::backdrop { backdrop-filter: blur(3px); }
 @media (prefers-reduced-motion: reduce) { .block, .nav, .thumb { transition: none; } }
+
+/* ---------- network stats ---------- */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+.stat { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: .15rem; padding: .7rem .9rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.stat .k { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+.stat b { font-size: 1.35rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.stat b em { font-style: normal; font-size: .85rem; color: var(--muted); font-weight: 400; margin-left: .2rem; }
+.stat small { color: var(--muted); font-size: .78rem; }
+.stat svg { position: absolute; right: 0; bottom: 0; width: 45%; height: 40%; opacity: .55; pointer-events: none; }
+.stat svg polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.stat .bar { display: block; height: 4px; margin-top: .35rem; border-radius: 2px; background: var(--line); overflow: hidden; }
+.stat .bar u { display: block; height: 100%; width: 0; background: var(--accent); text-decoration: none; transition: width .6s; }
+.stat b.up { color: var(--ok); } .stat b.down { color: var(--bad); }
+@media (max-width: 860px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 380px) { .stat b { font-size: 1.15rem; } .stat { padding: .6rem .7rem; } }
+@media (prefers-reduced-motion: reduce) { .stat .bar u { transition: none; } }

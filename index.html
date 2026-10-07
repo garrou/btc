@@ -17,6 +17,31 @@
   </header>
 
   <main>
+    <section class="stats" aria-label="Réseau Bitcoin">
+      <div class="stat">
+        <span class="k">Hashrate</span>
+        <b id="st-hash">—</b>
+        <small id="st-hash-sub">moyenne sur 3 jours</small>
+        <svg id="st-spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline points=""/></svg>
+      </div>
+      <div class="stat">
+        <span class="k">Difficulté</span>
+        <b id="st-diff">—</b>
+        <small id="st-diff-sub">&nbsp;</small>
+      </div>
+      <div class="stat">
+        <span class="k">Prochain ajustement</span>
+        <b id="st-adj">—</b>
+        <small id="st-adj-sub">&nbsp;</small>
+        <i class="bar"><u id="st-adj-bar"></u></i>
+      </div>
+      <div class="stat" id="st-power-box">
+        <span class="k">Consommation estimée</span>
+        <b id="st-power">—</b>
+        <small id="st-power-sub">&nbsp;</small>
+      </div>
+    </section>
+
     <section class="stage">
       <div class="hud hud-top">
         <div class="hud-title"><b id="hud-title">Bloc</b> <span id="hud-sub" class="muted"></span></div>
