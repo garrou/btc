@@ -119,6 +119,7 @@
       scene.add(group);
       const slot = {
         id: meta.id, kind: meta.kind, group, cage, glass, targetX: 0, mesh: null, txs: null,
+        placer: meta.kind === 'next' ? BTC.layout.stable() : null, // the projected block changes all the time: its towers stay put
         list: [], rects: [], heights: [], base: null, t: 0, growing: false, arrivals: [], stream: [], pulse: 0
       };
       slots.set(meta.id, slot);
@@ -281,12 +282,16 @@
       const txs = slot.txs;
       if (!txs || !txs.length) {
         for (const a of carried) { slot.group.remove(a.mesh); a.mesh.material.dispose(); }
+        if (slot.placer) slot.placer.reset();
         disposeMesh(slot); slot.list = []; slot.growing = false; return;
       }
       // previous footprints by txid, to glide towers to their new place (only for an in-place update of a shown block)
       const prev = !animate && !reduceMotion && slot.mesh && slot.list.length
         ? new Map(slot.list.map((x, k) => [x.txid, { r: slot.rects[k], h: slot.heights[k] }])) : null;
-      const layout = BTC.layout.block(txs, layoutOrder); // pure computation (core/treemap.js)
+      // pure computations (core/treemap.js). The projected block keeps the places of its towers from one update to the
+      // next (newcomers take free room, everything is laid out again only when there is none); a first fill starts afresh.
+      if (slot.placer && animate) slot.placer.reset();
+      const layout = slot.placer ? slot.placer.update(txs, layoutOrder) : BTC.layout.block(txs, layoutOrder);
       slot.list = layout.list;
       slot.rects = layout.rects;
       slot.heights = layout.heights;
@@ -564,7 +569,11 @@
       setOrder(mode) {
         if (!BTC.config.orders.includes(mode) || mode === layoutOrder) return;
         layoutOrder = mode;
-        for (const s of slots.values()) if (s.txs && s.mesh) buildMesh(s, false, null);
+        for (const s of slots.values()) {
+          if (!s.txs || !s.mesh) continue;
+          if (s.placer) s.placer.reset(); // the order applies to the next layout: lay the block out again
+          buildMesh(s, false, null);
+        }
       },
     };
   }

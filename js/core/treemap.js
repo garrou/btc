@@ -1,4 +1,5 @@
-// Block layout: squarified treemap (area proportional to vsize) with the coinbase as a fixed pillar. Pure math.
+// Block layout: squarified treemap (area proportional to vsize) with the coinbase as a fixed pillar, and an incremental
+// variant for a block that keeps changing (the projected one: towers stay where they are). Pure math.
 (() => {
   'use strict';
   const BTC = (window.BTC = window.BTC || {});
@@ -7,8 +8,9 @@
   /**
    * Squarified treemap: vals (> 0) -> rectangles {x, y, w, h} in a W x H area, area proportional to the value.
    * capacity: reference total for the scale (>= sum of values); a sparsely filled block leaves empty space.
+   * Returns {rects, rest, scale}: `rest` is the single free rectangle left after the last row, `scale` the area per unit.
    */
-  function squarify(vals, W, H, capacity) {
+  function pack(vals, W, H, capacity) {
     const k = (W * H) / Math.max(capacity || 0, vals.reduce((s, v) => s + v, 0));
     const out = new Array(vals.length);
     let x = 0, y = 0, w = W, h = H, i = 0;
@@ -36,8 +38,12 @@
       }
       i = j;
     }
-    return out;
+    return { rects: out, rest: { x, y, w, h }, scale: k };
   }
+
+  const squarify = (vals, W, H, capacity) => pack(vals, W, H, capacity).rects;
+
+  const EPS = 1e-4; // tolerance on coordinates (the treemap adds floats), and the smallest piece of platform worth keeping
 
   const byTxid = (a, b) => (a.txid < b.txid ? -1 : a.txid > b.txid ? 1 : 0);
 
@@ -53,23 +59,126 @@
    * Layout of one block's platform. The coinbase is a fixed-size square pillar in a corner; the other txs share the
    * rest. A full block (~1 Mvb) fills everything, an almost empty block leaves most of it free (otherwise a lone
    * coinbase, or 2-3 big txs, would become a giant block). Provisional data (txs.approx, vsize = 1): whole platform.
-   * Returns parallel arrays: list (txs in layout order), rects, heights, and colors (Float32Array, 3 per tx).
+   * Returns parallel arrays: list (txs in layout order), rects, heights, and colors (Float32Array, 3 per tx), plus
+   * `free` (the rectangles left empty) and `scale` (area per vB).
    */
-  function layoutBlock(txs, order) {
+  function layoutBlock(txs, order, capacity = S.blockVsize) {
     const cb = txs.filter((x) => x.coinbase);
     const rest = orderTxs(txs.filter((x) => !x.coinbase), order);
     const lane = cb.length ? S.coinbaseSide : 0;
     const sizes = rest.map((x) => Math.max(1, x.vsize));
     const sum = sizes.reduce((s, v) => s + v, 0);
-    const laid = rest.length ? squarify(sizes, S.size, S.size - lane, txs.approx ? sum : S.blockVsize) : [];
+    const packed = rest.length ? pack(sizes, S.size, S.size - lane, txs.approx ? sum : capacity) : null;
+    const laid = packed ? packed.rects : [];
 
     const list = cb.concat(rest);
     const rects = cb.map(() => ({ x: 0, y: 0, w: S.coinbaseSide, h: S.coinbaseSide }))
       .concat(laid.map((r) => ({ x: r.x, y: r.y + lane, w: r.w, h: r.h })));
+    const free = [packed ? { ...packed.rest, y: packed.rest.y + lane } : { x: 0, y: lane, w: S.size, h: S.size - lane }];
+    if (lane) free.push({ x: S.coinbaseSide, y: 0, w: S.size - S.coinbaseSide, h: lane }); // beside the coinbase pillar
+    const scale = packed ? packed.scale : (S.size * (S.size - lane)) / S.blockVsize;
+    return { ...finish(list, rects), free: free.filter((r) => r.w > EPS && r.h > EPS), scale };
+  }
+
+  /** Heights and colors of laid out txs: parallel arrays with the list and its rects. */
+  function finish(list, rects) {
     const heights = list.map((x) => (x.coinbase ? S.frameH - 1 : BTC.colors.towerHeight(x.rate)));
     const colors = new Float32Array(list.length * 3);
     list.forEach((x, k) => colors.set(x.coinbase ? BTC.colors.COINBASE : BTC.colors.rate(x.rate), k * 3));
     return { list, rects, heights, colors };
+  }
+
+  // Accepted shapes of a newcomer (long side / short side), the squarest first: a tight block takes thin slabs
+  // rather than a new layout.
+  const ASPECTS = [3, 8, 20];
+  const MIN_FREE = 0.05; // free pieces smaller than this (units^2) hold no tower: dropped
+  const HEADROOM = 1.1;  // a nearly full block is laid out as if it held 10 % more: room left for newcomers (fewer full layouts)
+
+  /** The rectangle formed by two free rectangles that share a whole edge, or null. */
+  function join(a, b) {
+    const sameCol = Math.abs(a.x - b.x) < EPS && Math.abs(a.w - b.w) < EPS;
+    const sameRow = Math.abs(a.y - b.y) < EPS && Math.abs(a.h - b.h) < EPS;
+    if (sameCol && Math.abs(a.y + a.h - b.y) < EPS) return { x: a.x, y: a.y, w: a.w, h: a.h + b.h };
+    if (sameCol && Math.abs(b.y + b.h - a.y) < EPS) return { x: a.x, y: b.y, w: a.w, h: a.h + b.h };
+    if (sameRow && Math.abs(a.x + a.w - b.x) < EPS) return { x: a.x, y: a.y, w: a.w + b.w, h: a.h };
+    if (sameRow && Math.abs(b.x + b.w - a.x) < EPS) return { x: b.x, y: a.y, w: a.w + b.w, h: a.h };
+    return null;
+  }
+
+  /** Shape {w, h} of a tower of this area inside the free rectangle f, as square as allowed (long/short <= maxAspect), or null. */
+  function shapeIn(area, f, maxAspect) {
+    const lo = Math.max(area / f.h, Math.sqrt(area / maxAspect)), hi = Math.min(f.w, Math.sqrt(area * maxAspect));
+    if (lo > hi + EPS) return null;
+    const w = Math.min(hi, Math.max(lo, Math.sqrt(area)));
+    return { w, h: area / w };
+  }
+
+  /**
+   * Incremental layout of a block that keeps changing (the projected next block). A tower keeps its place for as long as
+   * it stays in the block; the place of a tower that left is reused by the newcomers (best fit, biggest first), and the
+   * whole block is laid out again from scratch only when a newcomer finds no room, or after reset().
+   * update(txs, order) returns what layoutBlock returns, plus `relaid` (true when everything was laid out again).
+   */
+  function stableLayout() {
+    let placed = null;  // txid -> rect, null before the first layout
+    let free = [];      // free rectangles: disjoint from each other and from the placed ones
+    let scale = 0;      // area per vB, fixed between two full layouts
+
+    function addFree(r) { // a free piece, merged with the neighbours it shares a whole edge with
+      let cur = r;
+      for (let i = 0; i < free.length;) {
+        const m = join(cur, free[i]);
+        if (m) { cur = m; free.splice(i, 1); i = 0; } else i++;
+      }
+      free.push(cur);
+    }
+
+    /** Takes a place of this area out of the free space: the smallest free rectangle where it fits. Null when none does. */
+    function take(area) {
+      for (const maxAspect of ASPECTS) {
+        let best = null;
+        free.forEach((f, i) => {
+          const shape = shapeIn(area, f, maxAspect);
+          const waste = f.w * f.h - area;
+          if (shape && (!best || waste < best.waste - 1e-9)) best = { i, shape, waste };
+        });
+        if (!best) continue;
+        const f = free.splice(best.i, 1)[0], { w, h } = best.shape;
+        // two ways to cut what is left of f around the tower: keep the largest leftover piece as large as possible
+        const a = [{ x: f.x + w, y: f.y, w: f.w - w, h }, { x: f.x, y: f.y + h, w: f.w, h: f.h - h }];
+        const b = [{ x: f.x + w, y: f.y, w: f.w - w, h: f.h }, { x: f.x, y: f.y + h, w, h: f.h - h }];
+        const biggest = (pieces) => Math.max(...pieces.map((q) => q.w * q.h));
+        for (const q of biggest(a) >= biggest(b) ? a : b) if (q.w > EPS && q.h > EPS && q.w * q.h >= MIN_FREE) addFree(q);
+        return { x: f.x, y: f.y, w, h };
+      }
+      return null;
+    }
+
+    function relayout(txs, order) {
+      const total = txs.reduce((s, t) => s + (t.coinbase ? 0 : Math.max(1, t.vsize)), 0);
+      const L = layoutBlock(txs, order, Math.max(S.blockVsize, total * HEADROOM));
+      placed = new Map(L.list.map((t, k) => [t.txid, L.rects[k]]));
+      free = L.free.filter((r) => r.w * r.h >= MIN_FREE);
+      scale = L.scale;
+      return { ...L, relaid: true };
+    }
+
+    return {
+      reset() { placed = null; free = []; },
+      update(txs, order) {
+        if (!placed || txs.approx || txs.some((t) => t.coinbase)) return relayout(txs, order);
+        const now = new Set(txs.map((t) => t.txid));
+        for (const [id, r] of placed) if (!now.has(id)) { placed.delete(id); addFree({ ...r }); }
+        const added = txs.filter((t) => !placed.has(t.txid)).sort((a, b) => b.vsize - a.vsize || byTxid(a, b));
+        for (const t of added) {
+          const r = take(Math.max(1, t.vsize) * scale);
+          if (!r) return relayout(txs, order); // no room left for this one: everything is laid out again
+          placed.set(t.txid, r);
+        }
+        const list = txs.slice();
+        return { ...finish(list, list.map((t) => placed.get(t.txid))), relaid: false };
+      },
+    };
   }
 
   /**
@@ -82,5 +191,5 @@
   }
 
   BTC.treemap = { squarify };
-  BTC.layout = { block: layoutBlock, orderTxs, nominalTower };
+  BTC.layout = { block: layoutBlock, stable: stableLayout, orderTxs, nominalTower };
 })();
