@@ -34,7 +34,7 @@
     onSelectNext: () => nav.focus(nextId),
     onLoadOlder: nav.loadOlder,
   });
-  const layout = ui.hud.init({
+  const prefs = ui.hud.init({
     onFollow: nav.onFollow,
     onOrder: (mode) => BTC.sceneSync.setOrder(mode),
     onPlacement: (mode) => BTC.sceneSync.setPlacement(mode),
@@ -42,8 +42,8 @@
   });
   if (scene) {
     BTC.sceneSync.init(scene);
-    BTC.sceneSync.setOrder(layout.order);
-    BTC.sceneSync.setPlacement(layout.placement);
+    BTC.sceneSync.setOrder(prefs.order);
+    BTC.sceneSync.setPlacement(prefs.placement);
   } else ui.hud.hideStage();
 
   // ----- search -----
@@ -74,5 +74,11 @@
   BTC.feedCtl.poll();
   setInterval(BTC.feedCtl.poll, BTC.config.feed.pollMs);
   setInterval(BTC.feedCtl.flush, BTC.config.feed.flushMs);
-  setInterval(() => nav.renderRow(), 30000); // refreshes the "x ago" labels
+  setInterval(ui.blocksRow.refreshAgo, 30000);
+  document.addEventListener('visibilitychange', () => { // back to the tab: catch up now rather than at the next tick
+    if (document.hidden) return;
+    ui.blocksRow.refreshAgo();
+    BTC.statsCtl.maybeRefresh();
+    BTC.feedCtl.poll();
+  });
 })();

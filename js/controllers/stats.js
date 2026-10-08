@@ -6,7 +6,7 @@
   let last = 0, running = false;
 
   async function refresh() {
-    if (running) return; // a slow API must not pile up requests
+    if (running || document.hidden) return; // a slow API must not pile up requests; nobody looks at a hidden tab
     running = true;
     last = Date.now();
     try {

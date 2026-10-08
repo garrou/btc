@@ -99,7 +99,7 @@
     const shown = windowBlocks();
     scene.setSlots([
       ...(showsNext() ? [{ id: S.nextId, kind: 'next', label: 'NEXT' }] : []),
-      ...shown.map((b) => ({ id: b.id, kind: 'mined', label: `#${BTC.format.number(b.height)}` })),
+      ...shown.map((b) => ({ id: b.id, kind: 'mined', label: `#${BTC.format.number(b.height)}`, prev: b.previousblockhash })),
     ]);
     for (const id of [...cache.keys(), ...light, ...retryCount.keys()]) {
       if (!shown.some((b) => b.id === id)) { forget(id); light.delete(id); retryCount.delete(id); }

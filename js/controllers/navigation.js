@@ -94,6 +94,12 @@
 
   // ----- block list -----
 
+  /** The camera must not stay on a block that is no longer in the list (replaced by a chain reorganization). */
+  function ensureFocusExists() {
+    if (!sync().active() || !state.blocks.length) return;
+    if (state.focusId !== S.nextId && !state.blocks.some((x) => x.id === state.focusId)) focus(state.blocks[0].id, true);
+  }
+
   /** A new block was mined (WebSocket). */
   function addBlock(b) {
     state.tip = Math.max(state.tip, b.height);
@@ -101,15 +107,20 @@
     sync().resetProjection(); // the next block is recomputed, whatever we are looking at
     BTC.statsCtl.maybeRefresh(); // a new block moves the retarget progress
     if (state.detached) return; // browsing a searched block: the live list is reloaded when coming back
-    state.blocks = BTC.blocks.merge(state.blocks, [b]);
-    // follow: back to the latest blocks; otherwise keep the same window (indexes shifted by the new block), and keep the
-    // selected block inside it
-    if (state.follow) state.sceneOffset = 0; else if (state.sceneOffset > 0) state.sceneOffset++;
+    const before = state.blocks;
+    state.blocks = BTC.blocks.merge(before, [b]);
+    // follow: back to the latest blocks; otherwise keep the same window (indexes shifted by the blocks added above it),
+    // and keep the selected block inside it
+    if (state.follow) state.sceneOffset = 0; else if (state.sceneOffset > 0) state.sceneOffset += BTC.blocks.insertedAbove(before, state.blocks);
     state.sceneOffset = BTC.blocks.ensureVisible(state.blocks, state.focusId, state.sceneOffset, S.shown);
     renderRow(b.id);
+    // the new block must sit on the block we have just below it; if not (a missed block, a deeper reorganization),
+    // load the latest blocks again
+    const parent = state.blocks.find((x) => x.height === b.height - 1);
+    if (state.blocks.length > 1 && (!parent || (b.previousblockhash && parent.id !== b.previousblockhash))) loadBlocks();
     if (!sync().active()) return;
     sync().sync();
-    if (state.follow) focus(b.id, true);
+    if (state.follow) focus(b.id, true); else ensureFocusExists();
   }
 
   /** Merges the latest blocks into the state (startup, and backfill after a WebSocket reconnect). */
@@ -128,7 +139,7 @@
     if (!sync().active()) return;
     if (!first) sync().resetProjection();
     sync().sync();
-    if (first || state.follow) focus(state.blocks[0].id, true);
+    if (first || state.follow) focus(state.blocks[0].id, true); else ensureFocusExists();
   }
 
   /** refreshBlocks with retries and a growing delay while the API is unavailable. */
@@ -194,5 +205,5 @@
     focus(target.id); // manual choice: turns "follow" off and moves the 3D window if needed
   }
 
-  BTC.nav = { focus, showLive, onFollow, addBlock, refreshBlocks, loadBlocks, loadOlder, goToBlock, renderRow, refreshHud };
+  BTC.nav = { focus, onFollow, addBlock, refreshBlocks, loadBlocks, loadOlder, goToBlock, refreshHud };
 })();

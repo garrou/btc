@@ -533,18 +533,34 @@ dd {
 
 .legend {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: .5rem;
   font-size: .75rem;
+  line-height: 8px; /* the unit sits at the height of the bar */
   color: var(--muted);
 }
 
-.legend i {
+.legend-scale {
+  position: relative;
   width: 180px;
-  height: 8px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, #2d3a9e, #1f8fe0, #22c9a6, #7ddc4a, #f2d33c, #f7931a, #ff3d6e);
+  padding-bottom: 1.1rem; /* room for the ticks */
 }
+
+.legend-scale i {
+  display: block;
+  height: 8px;
+  border-radius: 4px; /* the gradient is set by the script, from the color stops */
+}
+
+.legend-scale span span { /* a tick label */
+  position: absolute;
+  top: 12px;
+  transform: translateX(-50%);
+  font-size: .65rem;
+  line-height: 1;
+}
+
+.legend-scale span .first { transform: none; }
 
 .tooltip {
   position: absolute;
@@ -727,7 +743,7 @@ dd .mono,
     font-size: 1rem;
   }
 
-  .legend i {
+  .legend-scale {
     width: 110px;
   }
 

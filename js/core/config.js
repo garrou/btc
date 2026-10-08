@@ -23,7 +23,6 @@
       size: 40,             // side of a block's platform
       pitch: 60,            // distance between two blocks
       frameH: 16,           // height of the cage
-      coinbaseSide: 3,      // side of the coinbase pillar
       blockVsize: 1e6,      // block capacity (vB): reference for the footprint scale
       blockWeight: 4e6,     // block capacity (WU)
       projectedThrottleMs: 2500, // minimum delay between two rebuilds of the projected block
@@ -31,7 +30,6 @@
       maxRetry: 8,
       summaryMinRatio: 0.95, // a block summary with fewer rows than this share of tx_count is incomplete
     },
-    history: { pageSize: 15 },
     stats: { jPerTh: 25, refreshMs: 60000, minGapMs: 15000 },
     // Layout order of the towers: 'txid' = by transaction id (neutral, stable), 'api' = order given by mempool.space
     // (already sorted by fee rate), 'size' = largest first (squarer shapes, reshuffles on every change)

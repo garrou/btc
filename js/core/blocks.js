@@ -3,9 +3,14 @@
   'use strict';
   const BTC = (window.BTC = window.BTC || {});
 
-  /** Merges block lists (dedup by id, incoming entries replace existing ones), newest first. */
+  /**
+   * Merges block lists (dedup by id, incoming entries replace existing ones), newest first. The incoming blocks are the
+   * best chain: a loaded block at the same height with another id is a stale one (a chain reorganization), dropped.
+   */
   function merge(current, incoming) {
-    const byId = new Map([...current, ...incoming].map((b) => [b.id, b]));
+    const idAt = new Map(incoming.map((b) => [b.height, b.id]));
+    const kept = current.filter((b) => !idAt.has(b.height) || idAt.get(b.height) === b.id);
+    const byId = new Map([...kept, ...incoming].map((b) => [b.id, b]));
     return [...byId.values()].sort((x, y) => y.height - x.height);
   }
 

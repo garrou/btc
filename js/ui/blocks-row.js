@@ -20,20 +20,21 @@
       el('span', {}, `${F.number(b.tx_count)} tx`),
       el('span', {}, `${(b.size / 1e6).toFixed(2)} MB`),
       el('span', {}, b.extras?.pool?.name ?? '—'),
-      el('span', {}, F.ago(b.timestamp)));
+      el('span', { class: 'ago', 'data-ts': b.timestamp }, F.ago(b.timestamp)));
   }
 
   function nextCard(m, selected) {
     const [lo, hi] = m.feeRange ? [m.feeRange[0], m.feeRange.at(-1)] : [0, 0];
-    return el('div', {
+    return el('button', {
+      type: 'button',
       class: `block pending clickable${selected ? ' selected' : ''}`,
       style: `--fill:${Math.min(1, m.blockVSize / cfg.blockVsize)}`,
       onclick: () => handlers.onSelectNext(),
     },
       el('b', {}, 'Next'),
       el('span', {}, `${F.number(m.nTx)} tx`),
-      el('span', {}, `~${Math.round(m.medianFee)} sat/vB`),
-      el('span', {}, `${Math.round(lo)}–${Math.round(hi)} sat/vB`),
+      el('span', {}, `median ${F.rate(m.medianFee)} sat/vB`),
+      el('span', {}, `range ${F.rate(lo)}–${F.rate(hi)}`),
       el('span', {}, `${F.btc(m.totalFees)} fees`));
   }
 
@@ -58,6 +59,8 @@
     renderUpcoming(upcoming, selected) {
       $('#upcoming').replaceChildren(...upcoming.slice(0, 1).map((m) => nextCard(m, selected)));
     },
+    /** Refreshes the "x ago" of the cards without rebuilding them. */
+    refreshAgo() { document.querySelectorAll('#blocks .ago').forEach((n) => { n.textContent = F.ago(Number(n.dataset.ts)); }); },
     /** Highlights the card of the selected slot and brings it into view. */
     select(id) {
       document.querySelectorAll('#blocks .block').forEach((n) => n.classList.toggle('selected', n.dataset.id === id));

@@ -1,4 +1,4 @@
-// Block layout: squarified treemap (area proportional to vsize) with the coinbase as a fixed pillar, and an incremental
+// Block layout: squarified treemap (area proportional to vsize, the coinbase included), and an incremental
 // variant for a block that keeps changing (the projected one: towers stay where they are). Pure math.
 (() => {
   'use strict';
@@ -41,8 +41,6 @@
     return { rects: out, rest: { x, y, w, h }, scale: k };
   }
 
-  const squarify = (vals, W, H, capacity) => pack(vals, W, H, capacity).rects;
-
   const EPS = 1e-4; // tolerance on coordinates (the treemap adds floats), and the smallest piece of platform worth keeping
 
   const byTxid = (a, b) => (a.txid < b.txid ? -1 : a.txid > b.txid ? 1 : 0);
@@ -56,28 +54,25 @@
   }
 
   /**
-   * Layout of one block's platform. The coinbase is a fixed-size square pillar in a corner; the other txs share the
-   * rest. A full block (~1 Mvb) fills everything, an almost empty block leaves most of it free (otherwise a lone
-   * coinbase, or 2-3 big txs, would become a giant block). Provisional data (txs.approx, vsize = 1): whole platform.
-   * Returns parallel arrays: list (txs in layout order), rects, heights, and colors (Float32Array, 3 per tx), plus
-   * `free` (the rectangles left empty) and `scale` (area per vB).
+   * Layout of one block's platform: every tx, the coinbase too, gets a rectangle with an area proportional to its vsize,
+   * on the same scale for every block (a full block, ~1 Mvb, fills the platform). A lighter block fills only a square of
+   * the corner, so a lone coinbase, or 2-3 big txs, stay compact (neither a giant block, nor thin slivers). The coinbase
+   * comes first, so it always sits in the same corner; only its color and its fixed height mark it. Provisional data
+   * (txs.approx, vsize = 1): whole platform. Returns parallel arrays: list (txs in layout order), rects, heights, and
+   * colors (Float32Array, 3 per tx), plus `free` (the rectangles left empty) and `scale` (area per vB).
    */
   function layoutBlock(txs, order, capacity = S.blockVsize) {
-    const cb = txs.filter((x) => x.coinbase);
-    const rest = orderTxs(txs.filter((x) => !x.coinbase), order);
-    const lane = cb.length ? S.coinbaseSide : 0;
-    const sizes = rest.map((x) => Math.max(1, x.vsize));
+    const list = [...txs.filter((x) => x.coinbase), ...orderTxs(txs.filter((x) => !x.coinbase), order)];
+    const scale = (S.size * S.size) / capacity;
+    if (!list.length) return { ...finish(list, []), free: [{ x: 0, y: 0, w: S.size, h: S.size }], scale };
+    const sizes = list.map((x) => Math.max(1, x.vsize));
     const sum = sizes.reduce((s, v) => s + v, 0);
-    const packed = rest.length ? pack(sizes, S.size, S.size - lane, txs.approx ? sum : capacity) : null;
-    const laid = packed ? packed.rects : [];
-
-    const list = cb.concat(rest);
-    const rects = cb.map(() => ({ x: 0, y: 0, w: S.coinbaseSide, h: S.coinbaseSide }))
-      .concat(laid.map((r) => ({ x: r.x, y: r.y + lane, w: r.w, h: r.h })));
-    const free = [packed ? { ...packed.rest, y: packed.rest.y + lane } : { x: 0, y: lane, w: S.size, h: S.size - lane }];
-    if (lane) free.push({ x: S.coinbaseSide, y: 0, w: S.size - S.coinbaseSide, h: lane }); // beside the coinbase pillar
-    const scale = packed ? packed.scale : (S.size * (S.size - lane)) / S.blockVsize;
-    return { ...finish(list, rects), free: free.filter((r) => r.w > EPS && r.h > EPS), scale };
+    const side = txs.approx ? S.size : Math.min(S.size, Math.sqrt(sum * scale)); // the square the txs fill
+    const packed = pack(sizes, side, side, sum);
+    const free = side < S.size - EPS
+      ? [{ x: side, y: 0, w: S.size - side, h: S.size }, { x: 0, y: side, w: side, h: S.size - side }] // the L around the square
+      : [];
+    return { ...finish(list, packed.rects), free: free.filter((r) => r.w > EPS && r.h > EPS), scale: packed.scale };
   }
 
   /** Heights and colors of laid out txs: parallel arrays with the list and its rects. */
@@ -190,6 +185,5 @@
     return { w: side, h: side, height: BTC.colors.towerHeight(rate) };
   }
 
-  BTC.treemap = { squarify };
-  BTC.layout = { block: layoutBlock, stable: stableLayout, orderTxs, nominalTower };
+  BTC.layout = { block: layoutBlock, stable: stableLayout, nominalTower };
 })();

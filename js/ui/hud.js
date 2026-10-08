@@ -3,7 +3,7 @@
 (() => {
   'use strict';
   const BTC = (window.BTC = window.BTC || {});
-  const { $ } = BTC.dom;
+  const { $, el } = BTC.dom;
   const F = BTC.format;
 
   const ORDER_KEY = 'layoutOrder', PLACEMENT_KEY = 'layoutPlacement';
@@ -22,12 +22,23 @@
     return select.value;
   }
 
+  /** The fee scale legend: gradient and ticks come from the very stops the towers are colored with. */
+  function renderLegend() {
+    const C = BTC.colors, at = (r) => `${(C.position(r) * 100).toFixed(1)}%`;
+    const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
+    $('#legend-bar').style.background = `linear-gradient(90deg, ${C.stops.map((s) => `${css(s.hex)} ${at(s.rate)}`).join(', ')})`;
+    $('#legend-ticks').replaceChildren(...[C.MIN_RATE, 1, 10, 100].map((r) =>
+      el('span', { style: `left:${at(r)}`, class: r === C.MIN_RATE ? 'first' : '' }, String(r))));
+    $('#legend-max').textContent = `${C.MAX_RATE}+ sat/vB`; // the right end of the bar: this rate and above look the same
+  }
+
   BTC.ui.hud = {
     /**
      * handlers: onFollow(bool), onOrder(mode), onPlacement(mode), onDetails().
      * Returns {order, placement}: the layout choices to start with (the remembered ones, if any).
      */
     init(handlers) {
+      renderLegend();
       const order = rememberedSelect('#order', ORDER_KEY, handlers.onOrder);
       const placement = rememberedSelect('#placement', PLACEMENT_KEY, handlers.onPlacement);
       $('#follow').addEventListener('change', (e) => handlers.onFollow(e.target.checked));
@@ -46,7 +57,7 @@
     showNext(m) {
       $('#hud-title').textContent = 'Next block';
       $('#hud-sub').textContent = m
-        ? `projection · ${F.number(m.nTx)} tx · ~${Math.round(m.medianFee)} sat/vB`
+        ? `mempool projection · ${F.number(m.nTx)} tx · median ${F.rate(m.medianFee)} sat/vB`
         : 'mempool projection';
       $('#hud-details').hidden = true;
     },

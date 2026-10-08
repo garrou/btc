@@ -23,14 +23,14 @@
       <div class="stat">
         <span class="k">Hashrate</span>
         <b id="st-hash">—</b>
-        <small id="st-hash-sub">3-day average</small>
+        <small id="st-hash-sub">current estimate</small>
       </div>
       <div class="stat">
         <span class="k">Difficulty</span>
         <b id="st-diff">—</b>
         <small id="st-diff-sub">&nbsp;</small>
       </div>
-      <div class="stat">
+      <div class="stat" title="Estimated change at the next adjustment (every 2,016 blocks)">
         <span class="k">Next adjustment</span>
         <b id="st-adj">—</b>
         <small id="st-adj-sub">&nbsp;</small>
@@ -69,10 +69,11 @@
         <div id="scene-msg" class="scene-msg"></div>
       </div>
       <div class="hud hud-bottom">
-        <div class="legend">
-          <span>1</span><i></i><span>300+ sat/vB</span>
+        <div class="legend" aria-label="Fee rate scale, sat/vB">
+          <div class="legend-scale"><i id="legend-bar"></i><span id="legend-ticks"></span></div>
+          <span id="legend-max"></span>
         </div>
-        <small class="muted">area = size · height &amp; color = fee rate · click = details</small>
+        <small class="muted">area = size · height &amp; color = fee rate · gold = coinbase · click = details</small>
       </div>
     </section>
 
@@ -99,7 +100,7 @@
     </section>
 
     <section>
-      <h2 class="feed-head">Recent transactions <small id="txcount"></small>
+      <h2 class="feed-head">Recent transactions <small id="txcount" title="Received by this page (a sample of the mempool), not the network rate"></small>
         <label class="pause"><input type="checkbox" id="pause"> Pause</label>
       </h2>
       <ul id="txs" class="txs js-scroll"></ul>

@@ -21,13 +21,17 @@
   const fields = (rows) => el('dl', {}, rows.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
   const mono = (text) => el('span', { class: 'mono' }, text);
   const link = (text, onclick, extra = '') => el('button', { class: `link${extra}`, onclick }, text);
-  const addrLine = (addr, sats) => el('li', {}, mono(addr ?? 'OP_RETURN / non-standard'), el('span', {}, F.btc(sats)));
+  // An output without address: a data carrier (OP_RETURN), a bare public key, bare multisig or a non-standard script.
+  const NO_ADDRESS = { op_return: 'OP_RETURN (data)', p2pk: 'P2PK (no address)', multisig: 'Bare multisig (no address)', unknown: 'Non-standard script' };
+  const owner = (address, type) => address ?? NO_ADDRESS[type] ?? `No address${type ? ` (${type})` : ''}`;
+  const addrLine = (label, sats) => el('li', {}, mono(label), el('span', {}, sats == null ? '—' : F.btc(sats)));
   const moreRow = (n) => el('li', { class: 'more' }, `… and ${F.number(n)} more (not shown)`);
   const limited = (rows) => [...rows.slice(0, MAX_IO_ROWS), ...(rows.length > MAX_IO_ROWS ? [moreRow(rows.length - MAX_IO_ROWS)] : [])];
 
   function txCard(tx, linked = true) {
-    const inputs = tx.vin.map((i) => (i.is_coinbase ? addrLine('Coinbase (new coins)', 0) : addrLine(i.prevout?.scriptpubkey_address, i.prevout?.value ?? 0)));
-    const outputs = tx.vout.map((o) => addrLine(o.scriptpubkey_address, o.value));
+    const inputs = tx.vin.map((i) => (i.is_coinbase ? addrLine('Coinbase (new coins)', null)
+      : i.prevout ? addrLine(owner(i.prevout.scriptpubkey_address, i.prevout.scriptpubkey_type), i.prevout.value) : addrLine('Unknown input', null)));
+    const outputs = tx.vout.map((o) => addrLine(owner(o.scriptpubkey_address, o.scriptpubkey_type), o.value));
     const inTotal = BTC.txs.inputTotal(tx);
     const id = linked ? link(tx.txid, () => handlers.onOpenTx(tx.txid), ' mono') : mono(tx.txid);
     return el('div', { class: 'tx-card' }, id,
@@ -63,8 +67,8 @@
         ['Status', st.confirmed
           ? el('span', {}, 'Confirmed in block ', link(`#${F.number(st.block_height)}`, () => handlers.onOpenBlock(st.block_hash)), ` · ${F.date(st.block_time)}`)
           : 'Unconfirmed (mempool)'],
-        ...(inTotal ? [['Total spent (inputs)', `${inTotal.partial ? '≥ ' : ''}${F.btc(inTotal.sum)}`]] : []),
-        ['Total sent (outputs)', F.btc(BTC.txs.outputTotal(tx))],
+        ...(inTotal ? [['Total input', `${inTotal.partial ? '≥ ' : ''}${F.btc(inTotal.sum)}`]] : []),
+        ['Total output', F.btc(BTC.txs.outputTotal(tx))],
         ['Fee', tx.fee != null ? `${F.number(tx.fee)} sats${rate != null ? ` (${rate.toFixed(1)} sat/vB)` : ''}` : '—'],
         ['Size', `${F.number(tx.size)} B · ${F.number(Math.ceil(tx.weight / 4))} vB`],
       ]), txCard(tx, false));

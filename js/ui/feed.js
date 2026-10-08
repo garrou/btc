@@ -8,8 +8,12 @@
   let handlers = {};
 
   function row(t) {
-    const rate = t.vsize ? `${Math.round((t.fee || 0) / t.vsize)} sat/vB` : '—';
-    return el('li', { class: 'fresh', 'data-id': t.txid, onclick: () => handlers.onOpenTx(t.txid) },
+    const rate = t.vsize ? `${F.rate((t.fee || 0) / t.vsize)} sat/vB` : '—';
+    const open = () => handlers.onOpenTx(t.txid);
+    return el('li', {
+      class: 'fresh', 'data-id': t.txid, tabindex: 0, role: 'button', onclick: open,
+      onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } },
+    },
       el('span', { class: 'mono' }, t.txid),
       el('span', {}, t.value != null ? F.btc(t.value) : '—'),
       el('span', { class: 'muted' }, rate));

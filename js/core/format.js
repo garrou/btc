@@ -31,6 +31,14 @@
       if (min < 48 * 60) return `${Math.round(min / 60)} h`;
       return `${fixed(min / 1440, 1)} d`;
     },
+    /** Fee rate in sat/vB with the decimals it needs: "0.96" below 1 (the relay floor is 0.1), "2.4" below 10, "27" above. */
+    rate(r) {
+      if (!Number.isFinite(r)) return '—';
+      if (r === 0) return '0';
+      if (r < 0.01) return '<0.01';
+      if (r < 1) return fixed(r, 2);
+      return r < 10 ? fixed(r, 1) : fixed(r, 0);
+    },
     /** Sign prefix for a signed percentage / delta. */
     signed: (n, d = 1) => `${n >= 0 ? '+' : ''}${fixed(n, d)}`,
   };

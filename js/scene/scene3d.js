@@ -408,7 +408,9 @@
     });
 
     // ----- chain: a line links each block to the previous one, with its hash -----
-    // A pair = (most recent block, its predecessor). The "NEXT" link is pending: it must reference the latest mined block.
+    // A pair = (most recent block, its predecessor). The hash shown is the one stored in the header of the most recent
+    // block (`prev`); the link is only drawn when the block shown next to it is that parent. The "NEXT" link is pending:
+    // it references the latest mined block (the next header will contain its hash).
     const LINK_LEN = PITCH - SIZE - 2;   // length of the line between two platforms
     const linkGeo = new THREE.BoxGeometry(1, 0.2, 0.2);
     const packetGeo = new THREE.SphereGeometry(0.75, 12, 8);
@@ -434,7 +436,7 @@
       const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(1.5), transparent: true, opacity: pending ? 0.6 : 1, fog: false });
       const group = new THREE.Group(), beam = new THREE.Mesh(linkGeo, mat);
       beam.scale.x = LINK_LEN; group.add(beam);
-      const sprite = hashSprite(older.id, color); sprite.position.y = 3; group.add(sprite);
+      const sprite = hashSprite(newer.prev ?? older.id, color); sprite.position.y = 3; group.add(sprite);
       const packet = new THREE.Mesh(packetGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }));
       packet.visible = false; group.add(packet);
       group.position.y = 3;
@@ -450,7 +452,10 @@
 
     function syncLinks(metas) {
       const want = new Map();
-      for (let i = 0; i + 1 < metas.length; i++) want.set(metas[i].id, [metas[i], metas[i + 1]]);
+      for (let i = 0; i + 1 < metas.length; i++) {
+        if (metas[i].prev && metas[i].prev !== metas[i + 1].id) continue; // not its parent (a gap in the list): no link
+        want.set(metas[i].id, [metas[i], metas[i + 1]]);
+      }
       for (const [id, l] of [...links]) {
         const w = want.get(id);
         if (!w || w[1].id !== l.older) { disposeLink(l); links.delete(id); }
@@ -527,7 +532,7 @@
 
     // Public API (everything the controllers need; no app state leaks in)
     return {
-      /** metas: [{ id, kind: 'next' | 'mined', label }] from left to right. Slots no longer listed are removed. */
+      /** metas: [{ id, kind: 'next' | 'mined', label, prev? }] from left to right (`prev`: hash of the parent block). Slots no longer listed are removed. */
       setSlots(metas) {
         const keep = new Set(metas.map((m) => m.id));
         for (const s of [...slots.values()]) if (!keep.has(s.id)) removeSlot(s);

@@ -24,7 +24,7 @@
 
   let polling = false;
   async function poll() {
-    if (polling) return; // a slow API must not pile up requests
+    if (polling || document.hidden) return; // a slow API must not pile up requests; nobody looks at a hidden tab
     polling = true;
     try {
       ingest((await BTC.api.recent()).slice().reverse()); // oldest first: the newest ends on top
