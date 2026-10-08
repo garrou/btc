@@ -16,7 +16,7 @@
       const tx = await BTC.api.tx(txid);
       if (isCurrent(token)) BTC.ui.detail.tx(tx);
     } catch (e) {
-      if (isCurrent(token)) BTC.ui.detail.message(`Transaction introuvable (${e.message})`);
+      if (isCurrent(token)) BTC.ui.detail.message(`Transaction not found (${e.message})`);
     }
   }
 
@@ -31,7 +31,7 @@
       const known = BTC.state.blocks.find((x) => x.id === hash);
       BTC.ui.detail.block({ ...b0, extras: b0.extras ?? known?.extras }, txs);
     } catch (e) {
-      if (isCurrent(token)) BTC.ui.detail.message(`Bloc introuvable (${e.message})`);
+      if (isCurrent(token)) BTC.ui.detail.message(`Block not found (${e.message})`);
     }
   }
 

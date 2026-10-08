@@ -39,20 +39,20 @@
     setMessage(text) { $('#scene-msg').textContent = text; },
     setStatus(online) {
       const pill = $('#status');
-      pill.textContent = online ? 'en direct' : 'hors ligne';
+      pill.textContent = online ? 'live' : 'offline';
       pill.className = `pill ${online ? 'on' : 'off'}`;
     },
     /** m: first projected block from the mempool (may be undefined). */
     showNext(m) {
-      $('#hud-title').textContent = 'Prochain bloc';
+      $('#hud-title').textContent = 'Next block';
       $('#hud-sub').textContent = m
         ? `projection · ${F.number(m.nTx)} tx · ~${Math.round(m.medianFee)} sat/vB`
-        : 'projection du mempool';
+        : 'mempool projection';
       $('#hud-details').hidden = true;
     },
     showBlock(b) {
-      $('#hud-title').textContent = `Bloc #${F.number(b.height)}`;
-      $('#hud-sub').textContent = `${F.number(b.tx_count)} tx · ${F.fixed(BTC.blocks.fillPercent(b))} % plein · ${b.extras?.pool?.name ?? 'mineur inconnu'} · ${F.date(b.timestamp)}`;
+      $('#hud-title').textContent = `Block #${F.number(b.height)}`;
+      $('#hud-sub').textContent = `${F.number(b.tx_count)} tx · ${F.fixed(BTC.blocks.fillPercent(b))}% full · ${b.extras?.pool?.name ?? 'unknown miner'} · ${F.date(b.timestamp)}`;
       $('#hud-details').hidden = false;
     },
   };

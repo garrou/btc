@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 
 <head>
   <meta charset="utf-8">
@@ -12,32 +12,32 @@
   <header class="top">
     <h1>₿ Explorer</h1>
     <form id="search" autocomplete="off">
-      <input id="q" type="search" placeholder="Hauteur, hash de bloc ou txid" aria-label="Recherche">
-      <button type="submit">Chercher</button>
+      <input id="q" type="search" placeholder="Height, block hash or txid" aria-label="Search">
+      <button type="submit">Search</button>
     </form>
-    <span id="status" class="pill off">hors ligne</span>
+    <span id="status" class="pill off">offline</span>
   </header>
 
   <main>
-    <section class="stats" aria-label="Réseau Bitcoin">
+    <section class="stats" aria-label="Bitcoin network">
       <div class="stat">
         <span class="k">Hashrate</span>
         <b id="st-hash">—</b>
-        <small id="st-hash-sub">moyenne sur 3 jours</small>
+        <small id="st-hash-sub">3-day average</small>
       </div>
       <div class="stat">
-        <span class="k">Difficulté</span>
+        <span class="k">Difficulty</span>
         <b id="st-diff">—</b>
         <small id="st-diff-sub">&nbsp;</small>
       </div>
       <div class="stat">
-        <span class="k">Prochain ajustement</span>
+        <span class="k">Next adjustment</span>
         <b id="st-adj">—</b>
         <small id="st-adj-sub">&nbsp;</small>
         <i class="bar"><u id="st-adj-bar"></u></i>
       </div>
       <div class="stat" id="st-power-box">
-        <span class="k">Consommation estimée</span>
+        <span class="k">Estimated power</span>
         <b id="st-power">—</b>
         <small id="st-power-sub">&nbsp;</small>
       </div>
@@ -45,23 +45,23 @@
 
     <section class="stage">
       <div class="hud hud-top">
-        <div class="hud-title"><b id="hud-title">Bloc</b> <span id="hud-sub" class="muted"></span></div>
+        <div class="hud-title"><b id="hud-title">Block</b> <span id="hud-sub" class="muted"></span></div>
         <div class="hud-actions">
-          <label><input type="checkbox" id="follow" checked> Suivre le dernier bloc</label>
-          <label title="Disposition des tours. Pour le prochain bloc en placement stable, elle ne fixe que la disposition de départ : ensuite les tours gardent leur place.">Ordre
-            <select id="order" aria-label="Ordre des tours">
-              <option value="txid">Identifiant</option>
-              <option value="api">Frais (ordre du bloc)</option>
-              <option value="size">Taille</option>
+          <label><input type="checkbox" id="follow" checked> Follow block</label>
+          <label title="Tower order (first layout only when Stable)">Order
+            <select id="order" aria-label="Tower order">
+              <option value="txid">Txid</option>
+              <option value="api">Fee rate (block order)</option>
+              <option value="size">Size</option>
             </select>
           </label>
-          <label title="Prochain bloc. Stable : les tours gardent leur place, les nouvelles prennent les trous. Compact : tout est replacé à chaque mise à jour (plus serré, mais ça bouge).">Placement
-            <select id="placement" aria-label="Placement des tours du prochain bloc">
+          <label title="Next block: Stable keeps towers in place, Compact repacks them">Placement
+            <select id="placement" aria-label="Next block placement">
               <option value="stable">Stable</option>
               <option value="compact">Compact</option>
             </select>
           </label>
-          <button id="hud-details" type="button">Détails du bloc</button>
+          <button id="hud-details" type="button">Block details</button>
         </div>
       </div>
       <div id="scene">
@@ -72,26 +72,25 @@
         <div class="legend">
           <span>1</span><i></i><span>300+ sat/vB</span>
         </div>
-        <small class="muted">surface = taille · hauteur &amp; couleur = frais · clic = détail de la tx</small>
+        <small class="muted">area = size · height &amp; color = fee rate · click = details</small>
       </div>
     </section>
 
     <section>
-      <h2>Blocs <small>prochain bloc (projection du mempool) → minés · clic = aller à ce bloc en 3D, double-clic =
-          détails</small></h2>
+      <h2>Blocks <small>click = 3D view · double-click = details</small></h2>
       <div class="chain-wrap">
-        <button type="button" class="nav nav-prev" aria-label="Blocs plus récents"><svg viewBox="0 0 24 24" width="20"
+        <button type="button" class="nav nav-prev" aria-label="Newer blocks"><svg viewBox="0 0 24 24" width="20"
             height="20" aria-hidden="true">
             <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
               stroke-linejoin="round" />
           </svg></button>
         <div class="chain">
           <div id="upcoming" class="row"></div>
-          <div class="tip" title="Dernier bloc miné"></div>
+          <div class="tip" title="Latest block"></div>
           <div id="blocks" class="row"></div>
           <button type="button" id="more-blocks" class="block more" hidden></button>
         </div>
-        <button type="button" class="nav nav-next" aria-label="Blocs plus anciens"><svg viewBox="0 0 24 24" width="20"
+        <button type="button" class="nav nav-next" aria-label="Older blocks"><svg viewBox="0 0 24 24" width="20"
             height="20" aria-hidden="true">
             <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
               stroke-linejoin="round" />
@@ -100,7 +99,7 @@
     </section>
 
     <section>
-      <h2 class="feed-head">Transactions récentes <small id="txcount"></small>
+      <h2 class="feed-head">Recent transactions <small id="txcount"></small>
         <label class="pause"><input type="checkbox" id="pause"> Pause</label>
       </h2>
       <ul id="txs" class="txs js-scroll"></ul>
@@ -108,7 +107,7 @@
   </main>
 
   <dialog id="detail" tabindex="-1">
-    <button id="close" aria-label="Fermer">✕</button>
+    <button id="close" aria-label="Close">✕</button>
     <div id="detail-body" class="js-scroll"></div>
   </dialog>
 

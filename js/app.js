@@ -16,10 +16,10 @@
     scene = BTC.scene3d?.create($('#scene'), {
       tooltip: $('#tip3d'),
       describe: (t) => (t.coinbase
-        ? 'Coinbase (récompense du bloc)'
+        ? 'Coinbase (block reward)'
         : t.approx
-          ? `${F.short(t.txid, 12, 8)}\n(taille et frais indisponibles)`
-          : `${F.short(t.txid, 12, 8)}\n${t.rate.toFixed(1)} sat/vB · ${F.number(t.vsize)} vB\nfrais ${F.number(t.fee)} sats`),
+          ? `${F.short(t.txid, 12, 8)}\n(size and fee unavailable)`
+          : `${F.short(t.txid, 12, 8)}\n${t.rate.toFixed(1)} sat/vB · ${F.number(t.vsize)} vB\nfee ${F.number(t.fee)} sats`),
       onPick: (t) => details.openTx(t.txid),
       onFocus: (id) => nav.focus(id),
     }) ?? null;

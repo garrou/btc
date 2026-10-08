@@ -21,9 +21,9 @@
   /** The scene message always describes the block the camera is on. */
   function updateMessage() {
     const st = status.get(state.focusId);
-    BTC.ui.hud.setMessage(st === 'loading' ? 'Chargement du bloc…'
-      : st === 'error' ? 'Chargement du bloc impossible pour le moment, nouvel essai…'
-        : st === 'failed' ? 'Chargement du bloc impossible. Cliquez sur le bloc pour réessayer.' : '');
+    BTC.ui.hud.setMessage(st === 'loading' ? 'Loading block…'
+      : st === 'error' ? "Can't load the block right now, retrying…"
+        : st === 'failed' ? "Can't load the block. Click it to retry." : '');
   }
 
   function forget(id) { cache.delete(id); status.delete(id); }
@@ -37,8 +37,8 @@
       // A freshly mined block may have an incomplete summary (sometimes only the coinbase): drawing it would give a
       // wrong scene (one giant tower). Reject it and retry later.
       if (BTC.txs.isCompleteSummary(rows, b.tx_count)) return BTC.txs.fromSummary(rows);
-      console.warn(`résumé du bloc ${b.height} incomplet (${Array.isArray(rows) ? rows.length : '?'}/${b.tx_count || 0}), nouvel essai plus tard`);
-    } catch (e) { console.warn('summary indisponible, repli sur /txids', e); }
+      console.warn(`block ${b.height} summary incomplete (${Array.isArray(rows) ? rows.length : '?'}/${b.tx_count || 0}), retrying later`);
+    } catch (e) { console.warn('summary unavailable, falling back to /txids', e); }
     return BTC.txs.provisional(await BTC.api.blockTxids(b.id), b.extras?.medianFee);
   }
 
@@ -72,7 +72,7 @@
       updateMessage();
       if (txs.approx) scheduleRetry(b); else retryCount.delete(b.id);
     } catch (e) {
-      console.warn('bloc', b.height, e);
+      console.warn('block', b.height, e);
       cache.delete(b.id);
       // network failure / rate limit: retry later, then give up (a click on the block tries again)
       if (wantsDetail(b)) status.set(b.id, scheduleRetry(b) ? 'error' : 'failed'); else status.delete(b.id);
@@ -98,7 +98,7 @@
   function sync() {
     const shown = windowBlocks();
     scene.setSlots([
-      ...(showsNext() ? [{ id: S.nextId, kind: 'next', label: 'PROCHAIN' }] : []),
+      ...(showsNext() ? [{ id: S.nextId, kind: 'next', label: 'NEXT' }] : []),
       ...shown.map((b) => ({ id: b.id, kind: 'mined', label: `#${BTC.format.number(b.height)}` })),
     ]);
     for (const id of [...cache.keys(), ...light, ...retryCount.keys()]) {

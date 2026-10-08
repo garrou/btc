@@ -27,7 +27,7 @@
     },
     /** stats: {total, rate} from core/feed.js */
     setCounter(stats) {
-      $('#txcount').textContent = `${F.number(stats.total)} vues · ≈ ${stats.rate.toFixed(1).replace('.', ',')} tx/s${$('#pause').checked ? ' · en pause' : ''}`;
+      $('#txcount').textContent = `${F.number(stats.total)} seen · ≈ ${stats.rate.toFixed(1)} tx/s${$('#pause').checked ? ' · paused' : ''}`;
     },
   };
 })();

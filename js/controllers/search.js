@@ -21,11 +21,11 @@
             if (e.status !== 404) throw e;
           }
         }
-        throw new Error('introuvable');
+        throw new Error('no block or transaction with this id');
       }
-      BTC.ui.detail.message('Entrée non reconnue : hauteur, hash de bloc (64 hex) ou txid.');
+      BTC.ui.detail.message('Not recognized: enter a height, a block hash or a txid (64 hex).');
     } catch (e) {
-      if (details.isCurrent(token)) BTC.ui.detail.message(`Introuvable (${e.message})`);
+      if (details.isCurrent(token)) BTC.ui.detail.message(`Not found (${e.message})`);
     }
   }
 

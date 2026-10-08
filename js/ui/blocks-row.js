@@ -18,7 +18,7 @@
     },
       el('b', {}, `#${F.number(b.height)}`),
       el('span', {}, `${F.number(b.tx_count)} tx`),
-      el('span', {}, `${(b.size / 1e6).toFixed(2)} Mo`),
+      el('span', {}, `${(b.size / 1e6).toFixed(2)} MB`),
       el('span', {}, b.extras?.pool?.name ?? '—'),
       el('span', {}, F.ago(b.timestamp)));
   }
@@ -30,11 +30,11 @@
       style: `--fill:${Math.min(1, m.blockVSize / cfg.blockVsize)}`,
       onclick: () => handlers.onSelectNext(),
     },
-      el('b', {}, 'Prochain'),
+      el('b', {}, 'Next'),
       el('span', {}, `${F.number(m.nTx)} tx`),
       el('span', {}, `~${Math.round(m.medianFee)} sat/vB`),
       el('span', {}, `${Math.round(lo)}–${Math.round(hi)} sat/vB`),
-      el('span', {}, `${F.btc(m.totalFees)} frais`));
+      el('span', {}, `${F.btc(m.totalFees)} fees`));
   }
 
   /** Scrolls the row horizontally (never the page) so that `card` is centered, or `offset` px from the left edge. */

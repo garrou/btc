@@ -26,7 +26,7 @@
     if (loadingOlder) return;
     const oldest = state.blocks.at(-1);
     ui().blocksRow.setMore(oldest && oldest.height > 0
-      ? { title: '+ Plus ancien', sub: `avant #${F.number(oldest.height)}` }
+      ? { title: '+ Older', sub: `before #${F.number(oldest.height)}` }
       : { hidden: true }); // nothing older than the genesis block
   }
 
@@ -66,7 +66,7 @@
       try { list = await BTC.api.blocks(); } catch (e) {
         console.warn('blocks', e);
         setFollow(false);
-        ui().hud.setMessage('Impossible de recharger les derniers blocs, réessayez.');
+        ui().hud.setMessage("Couldn't reload the latest blocks. Try again.");
         return;
       }
       if (request !== liveRequest || !state.detached) return; // cancelled by a newer navigation
@@ -139,13 +139,13 @@
     });
   }
 
-  /** "+ Plus ancien": loads one more page of older blocks. */
+  /** "+ Older": loads one more page of older blocks. */
   async function loadOlder() {
     const oldest = state.blocks.at(-1);
     if (loadingOlder || !oldest || oldest.height <= 0) return;
     loadingOlder = true;
     let failed = false;
-    ui().blocksRow.setMore({ disabled: true, title: 'Chargement…', sub: ' ' });
+    ui().blocksRow.setMore({ disabled: true, title: 'Loading…', sub: ' ' });
     try {
       const list = await BTC.api.blocksFrom(oldest.height - 1); // 15 blocks, newest first, starting at that height
       if (!Array.isArray(list) || !list.length) throw new Error('no blocks');
@@ -158,7 +158,7 @@
       failed = true;
     } finally {
       loadingOlder = false;
-      if (failed) ui().blocksRow.setMore({ title: 'Réessayer', sub: 'chargement impossible' });
+      if (failed) ui().blocksRow.setMore({ title: 'Retry', sub: 'loading failed' });
       else updateMoreButton();
     }
   }
@@ -177,13 +177,13 @@
     }
     const height = query.height ?? (await BTC.api.blockBasic(query.hash)).height;
     if (!details.isCurrent(token)) return;
-    if (state.tip && height > state.tip) throw new Error('hauteur au-delà du dernier bloc');
+    if (state.tip && height > state.tip) throw new Error('height above the latest block');
     let target = state.blocks.find((b) => b.height === height);
     if (!target) {
       const list = await BTC.api.blocksFrom(Math.min(height + 2, state.tip || height + 2)); // 2 newer blocks + the target + older ones
       if (!details.isCurrent(token)) return;
       target = list.find((b) => b.height === height);
-      if (!target) throw new Error('bloc introuvable');
+      if (!target) throw new Error('no block at this height');
       state.detached = true;
       state.blocks = list;
       state.sceneOffset = 0;
