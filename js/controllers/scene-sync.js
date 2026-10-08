@@ -157,5 +157,6 @@
     txCount: (id) => (scene ? scene.txCount(id) : 0),
     stream(items) { if (scene && items.length) scene.stream(items); },
     setOrder(mode) { if (scene) scene.setOrder(mode); },
+    setPlacement(mode) { if (scene) scene.setPlacement(mode); },
   };
 })();

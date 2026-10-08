@@ -37,5 +37,9 @@
     // (already sorted by fee rate), 'size' = largest first (squarer shapes, reshuffles on every change)
     orders: ['txid', 'api', 'size'],
     defaultOrder: 'txid',
+    // How the projected next block keeps its towers: 'stable' = they stay where they are and newcomers take free room,
+    // 'compact' = the whole block is laid out again at every update (tighter, but the towers move)
+    placements: ['stable', 'compact'],
+    defaultPlacement: 'stable',
   });
 })();

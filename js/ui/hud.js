@@ -1,35 +1,38 @@
-// The bar on top of the 3D scene (title, follow toggle, layout order, details button), the scene message, the status pill.
+// The bar on top of the 3D scene (title, follow toggle, layout order and placement, details button), the scene message,
+// the status pill.
 (() => {
   'use strict';
   const BTC = (window.BTC = window.BTC || {});
   const { $ } = BTC.dom;
   const F = BTC.format;
 
-  const ORDER_KEY = 'layoutOrder';
+  const ORDER_KEY = 'layoutOrder', PLACEMENT_KEY = 'layoutPlacement';
 
-  function savedOrder(select) {
+  /** A <select> whose choice is remembered between visits. Calls onChange(value) on a change; returns the value to start with. */
+  function rememberedSelect(selector, key, onChange) {
+    const select = $(selector);
     try {
-      const saved = localStorage.getItem(ORDER_KEY);
-      if (saved && [...select.options].some((o) => o.value === saved)) return saved;
+      const saved = localStorage.getItem(key);
+      if (saved && [...select.options].some((o) => o.value === saved)) select.value = saved;
     } catch { /* storage unavailable */ }
+    select.addEventListener('change', () => {
+      try { localStorage.setItem(key, select.value); } catch { /* storage unavailable */ }
+      onChange(select.value);
+    });
     return select.value;
   }
 
   BTC.ui.hud = {
     /**
-     * handlers: onFollow(bool), onOrder(mode), onDetails().
-     * Returns the layout order to start with (the remembered choice, if any).
+     * handlers: onFollow(bool), onOrder(mode), onPlacement(mode), onDetails().
+     * Returns {order, placement}: the layout choices to start with (the remembered ones, if any).
      */
     init(handlers) {
-      const select = $('#order');
-      select.value = savedOrder(select);
-      select.addEventListener('change', () => {
-        try { localStorage.setItem(ORDER_KEY, select.value); } catch { /* storage unavailable */ }
-        handlers.onOrder(select.value);
-      });
+      const order = rememberedSelect('#order', ORDER_KEY, handlers.onOrder);
+      const placement = rememberedSelect('#placement', PLACEMENT_KEY, handlers.onPlacement);
       $('#follow').addEventListener('change', (e) => handlers.onFollow(e.target.checked));
       $('#hud-details').addEventListener('click', () => handlers.onDetails());
-      return select.value;
+      return { order, placement };
     },
     hideStage() { $('.stage').hidden = true; },
     setFollow(on) { $('#follow').checked = on; },

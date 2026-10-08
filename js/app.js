@@ -34,12 +34,17 @@
     onSelectNext: () => nav.focus(nextId),
     onLoadOlder: nav.loadOlder,
   });
-  const order = ui.hud.init({
+  const layout = ui.hud.init({
     onFollow: nav.onFollow,
     onOrder: (mode) => BTC.sceneSync.setOrder(mode),
+    onPlacement: (mode) => BTC.sceneSync.setPlacement(mode),
     onDetails: () => state.selectedId && details.openBlock(state.selectedId),
   });
-  if (scene) { BTC.sceneSync.init(scene); BTC.sceneSync.setOrder(order); } else ui.hud.hideStage();
+  if (scene) {
+    BTC.sceneSync.init(scene);
+    BTC.sceneSync.setOrder(layout.order);
+    BTC.sceneSync.setPlacement(layout.placement);
+  } else ui.hud.hideStage();
 
   // ----- search -----
   $('#search').addEventListener('submit', (e) => {

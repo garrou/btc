@@ -119,7 +119,7 @@
       scene.add(group);
       const slot = {
         id: meta.id, kind: meta.kind, group, cage, glass, targetX: 0, mesh: null, txs: null,
-        placer: meta.kind === 'next' ? BTC.layout.stable() : null, // the projected block changes all the time: its towers stay put
+        placer: meta.kind === 'next' ? BTC.layout.stable() : null, // the projected block changes all the time (used by the 'stable' placement)
         list: [], rects: [], heights: [], base: null, t: 0, growing: false, arrivals: [], stream: [], pulse: 0
       };
       slots.set(meta.id, slot);
@@ -272,6 +272,7 @@
     }
 
     let layoutOrder = BTC.config.defaultOrder;
+    let placement = BTC.config.defaultPlacement;
 
     function buildMesh(slot, animate, incoming) {
       // In-flight arrival particles survive a rebuild (re-anchored by txid below); everything else is reset.
@@ -288,10 +289,12 @@
       // previous footprints by txid, to glide towers to their new place (only for an in-place update of a shown block)
       const prev = !animate && !reduceMotion && slot.mesh && slot.list.length
         ? new Map(slot.list.map((x, k) => [x.txid, { r: slot.rects[k], h: slot.heights[k] }])) : null;
-      // pure computations (core/treemap.js). The projected block keeps the places of its towers from one update to the
-      // next (newcomers take free room, everything is laid out again only when there is none); a first fill starts afresh.
-      if (slot.placer && animate) slot.placer.reset();
-      const layout = slot.placer ? slot.placer.update(txs, layoutOrder) : BTC.layout.block(txs, layoutOrder);
+      // pure computations (core/treemap.js). 'stable' placement: the projected block keeps the places of its towers from
+      // one update to the next (newcomers take free room, everything is laid out again only when there is none); a first
+      // fill starts afresh. 'compact': every update lays the block out again.
+      const stable = slot.placer && placement === 'stable';
+      if (stable && animate) slot.placer.reset();
+      const layout = stable ? slot.placer.update(txs, layoutOrder) : BTC.layout.block(txs, layoutOrder);
       slot.list = layout.list;
       slot.rects = layout.rects;
       slot.heights = layout.heights;
@@ -565,6 +568,16 @@
       },
       /** The camera follows this slot. */
       focus(id) { focusId = id; },
+      // Placement of the projected block: 'stable' (towers stay put) or 'compact' (laid out again at every update).
+      setPlacement(mode) {
+        if (!BTC.config.placements.includes(mode) || mode === placement) return;
+        placement = mode;
+        for (const s of slots.values()) {
+          if (!s.placer || !s.txs || !s.mesh) continue;
+          s.placer.reset(); // 'stable' starts from a fresh layout ('compact' does not use it)
+          buildMesh(s, false, null);
+        }
+      },
       // Change the layout order: every displayed block is re-laid out, towers glide to their new place.
       setOrder(mode) {
         if (!BTC.config.orders.includes(mode) || mode === layoutOrder) return;
