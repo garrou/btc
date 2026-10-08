@@ -72,6 +72,15 @@
     return { list, rects, heights, colors };
   }
 
+  /**
+   * Size of a lone tower, before it has a place in a block: the same scale as the projected block's layout (area
+   * proportional to vsize, a full block = the whole platform) and the same height rule (fee rate). The footprint is a square.
+   */
+  function nominalTower(vsize, rate) {
+    const side = Math.sqrt((Math.max(1, vsize) * S.size * S.size) / S.blockVsize);
+    return { w: side, h: side, height: BTC.colors.towerHeight(rate) };
+  }
+
   BTC.treemap = { squarify };
-  BTC.layout = { block: layoutBlock, orderTxs };
+  BTC.layout = { block: layoutBlock, orderTxs, nominalTower };
 })();

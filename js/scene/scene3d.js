@@ -1,5 +1,6 @@
 // Three.js view of the blocks: the next block (projection) followed by the mined blocks, in a row.
 // Each transaction is a tower on its block's platform: footprint = size, height + color = fee rate.
+// A transaction joining a block falls from the sky as that same tower (real footprint and height), then stays there.
 // Rendering only: the layout, colors and heights come from core/ (pure functions); this file knows nothing about the
 // app state or the network. Depends on the global THREE scripts (r147); EffectComposer/UnrealBloomPass are optional.
 (function () {
@@ -15,7 +16,9 @@
   const MORPH = 0.8;        // towers glide to their new place when a block is re-laid out (s)
   const ARRIVAL_GAP = 0.03; // delay between two arrivals (s)
   const FLIGHT = 1.2;       // fall duration (s)
-  const POP = 0.35;         // tower pop duration on landing (s)
+  const SETTLE = 0.3;       // a tower that just landed squashes a little, then recovers (s)
+  const SQUASH = 0.15;      // how much it squashes (share of its height)
+  const FILL = 0.86;        // share of its treemap cell a tower covers (the rest is the gap between towers)
   const FLASH = 0.7;        // white flash duration (s)
   const HOVER_WHITE = 2.4;  // color value of the hovered tower (> 1: glows with the bloom)
   const THEME = { mined: BTC.colors.MINED_BLOCK_HEX, next: BTC.colors.NEXT_BLOCK_HEX };
@@ -62,10 +65,28 @@
     const cageGeo = new THREE.BoxGeometry(SIZE, FRAME_H, SIZE);
     const cageEdges = new THREE.EdgesGeometry(cageGeo);
     const slabGeo = new THREE.BoxGeometry(SIZE + 2, 0.8, SIZE + 2);
-    const cubeGeo = new THREE.BoxGeometry(1, 1, 1);   // particle for an incoming transaction
     const dummy = new THREE.Object3D();
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const easeOutBack = (q) => 1 + 2.70158 * Math.pow(q - 1, 3) + 1.70158 * Math.pow(q - 1, 2);
+    const fit = (v) => Math.max(0.02, v * FILL); // size of a tower on a cell of the layout
+
+    const sizeTower = (mesh, w, height, d) => mesh.scale.set(fit(w), Math.max(0.05, height), fit(d));
+
+    // A falling transaction is its own tower: footprint w x d, height as in the block. Base-anchored (like the instances).
+    function fallingTower(color, w, height, d) {
+      const mesh = new THREE.Mesh(unitBox, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9, metalness: 0.35, roughness: 0.4 }));
+      sizeTower(mesh, w, height, d);
+      mesh.visible = false;
+      return mesh;
+    }
+    const randomSpin = () => (Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 3); // radians, unwound while falling
+
+    // Position of a falling tower at progress p (0..1): it moves over the block early, then drops straight down onto
+    // its place (accelerating) while turning until it is aligned with it.
+    function fall(a, p) {
+      const move = 1 - Math.pow(1 - p, 3), drop = p * p, { from, to } = a;
+      a.mesh.position.set(from.x + (to.x - from.x) * move, from.y + (to.y - from.y) * drop, from.z + (to.z - from.z) * move);
+      a.mesh.rotation.y = a.spin * (1 - p) * (1 - p);
+    }
 
     function labelSprite(text, color) {
       const c = document.createElement('canvas'); c.width = 512; c.height = 128;
@@ -144,7 +165,7 @@
     // e = growth progress (0 = on the ground, 1 = full height)
     function place(slot, k, r, height) {
       dummy.position.set(r.x + r.w / 2 - SIZE / 2, 0, r.y + r.h / 2 - SIZE / 2);
-      dummy.scale.set(Math.max(0.02, r.w * 0.86), Math.max(0.001, height), Math.max(0.02, r.h * 0.86));
+      dummy.scale.set(fit(r.w), Math.max(0.001, height), fit(r.h));
       dummy.updateMatrix();
       slot.mesh.setMatrixAt(k, dummy.matrix);
     }
@@ -173,43 +194,40 @@
       slot.mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // A transaction joining the block: a glowing cube falls from the sky onto the platform, then its tower pops up.
+    // A transaction joining the block: its tower (real footprint and height) falls from the sky onto its place.
     function spawnArrivals(slot, ids) {
       const index = new Map(slot.list.map((x, k) => [x.txid, k]));
       let n = 0;
       for (const id of ids) {
         const k = index.get(id);
         if (k === undefined || n >= MAX_ARRIVALS) continue;
-        const r = slot.rects[k], side = Math.min(2.2, Math.max(0.8, Math.sqrt(r.w * r.h) * 0.9));
-        const color = new THREE.Color().fromArray(slot.base, k * 3).multiplyScalar(1.8);
-        const mesh = new THREE.Mesh(cubeGeo, new THREE.MeshBasicMaterial({ color, fog: false }));
-        mesh.scale.setScalar(side);
-        mesh.visible = false;
+        const r = slot.rects[k];
+        const mesh = fallingTower(new THREE.Color().fromArray(slot.base, k * 3), r.w, slot.heights[k], r.h);
         const ang = Math.random() * Math.PI * 2, rad = SIZE * (0.7 + Math.random() * 0.5);
         const from = new THREE.Vector3(Math.cos(ang) * rad, FRAME_H + 22 + Math.random() * 10, Math.sin(ang) * rad);
-        const to = new THREE.Vector3(r.x + r.w / 2 - SIZE / 2, side / 2, r.y + r.h / 2 - SIZE / 2);
+        const to = new THREE.Vector3(r.x + r.w / 2 - SIZE / 2, 0, r.y + r.h / 2 - SIZE / 2);
         slot.group.add(mesh);
-        slot.arrivals.push({ txid: id, k, mesh, from, to, delay: n * ARRIVAL_GAP, t: 0, landed: false, popT: 0 });
-        setTower(slot, k, 0); // the tower doesn't exist yet: it pops up on landing
+        slot.arrivals.push({ txid: id, k, mesh, from, to, spin: randomSpin(), delay: n * ARRIVAL_GAP, t: 0, landed: false, landT: 0 });
+        setTower(slot, k, 0); // the tower of the block doesn't exist yet: the falling one takes over on landing
         n++;
       }
       if (n) slot.mesh.instanceMatrix.needsUpdate = true;
     }
 
-    // Stream: every new mempool transaction is a particle falling toward the next block (decoration, not its exact content)
+    // Stream: every new mempool transaction falls toward the next block as its real tower (size and fee known) or, when
+    // only its id is known, as a small cube. Decoration: it lands anywhere on the platform, not at its place in the block.
     function streamInto(slot, items) {
       for (const it of items) {
         if (slot.stream.length >= MAX_STREAM) break;
-        const color = (it.rate != null ? colorOf(BTC.colors.rate(it.rate)) : new THREE.Color(BTC.colors.NEXT_BLOCK_HEX)).multiplyScalar(1.6);
-        const mesh = new THREE.Mesh(cubeGeo, new THREE.MeshBasicMaterial({ color, fog: false }));
+        const color = it.rate != null ? colorOf(BTC.colors.rate(it.rate)) : new THREE.Color(BTC.colors.NEXT_BLOCK_HEX);
         const side = 0.7 + Math.random() * 0.6;
-        mesh.scale.setScalar(side);
-        mesh.visible = false;
+        const t = it.rate != null && it.vsize > 1 ? BTC.layout.nominalTower(it.vsize, it.rate) : { w: side, h: side, height: side };
+        const mesh = fallingTower(color, t.w, t.height, t.h);
         const ang = Math.random() * Math.PI * 2, rad = SIZE * (0.8 + Math.random() * 0.6);
         const from = new THREE.Vector3(Math.cos(ang) * rad, FRAME_H + 14 + Math.random() * 14, Math.sin(ang) * rad);
-        const to = new THREE.Vector3((Math.random() - 0.5) * SIZE * 0.85, 1 + Math.random() * 3, (Math.random() - 0.5) * SIZE * 0.85);
+        const to = new THREE.Vector3((Math.random() - 0.5) * SIZE * 0.85, 0, (Math.random() - 0.5) * SIZE * 0.85);
         slot.group.add(mesh);
-        slot.stream.push({ mesh, from, to, delay: Math.random() * 1.8, t: 0, dur: 0.9 + Math.random() * 0.5 });
+        slot.stream.push({ mesh, from, to, spin: randomSpin(), delay: Math.random() * 1.8, t: 0, dur: 0.9 + Math.random() * 0.5 });
       }
     }
 
@@ -220,8 +238,7 @@
         const p = (a.t - a.delay) / a.dur;
         if (p < 0) continue;
         a.mesh.visible = p < 1;
-        a.mesh.position.copy(a.from).lerp(a.to, p * p);
-        a.mesh.rotation.y += dt * 5;
+        fall(a, Math.min(1, p));
         if (p >= 1) { a.done = true; s.group.remove(a.mesh); a.mesh.material.dispose(); s.pulse = Math.max(s.pulse, 0.45); }
       }
       s.stream = s.stream.filter((a) => !a.done);
@@ -236,24 +253,21 @@
         if (!a.landed) {
           const p = Math.min(1, local / FLIGHT);
           a.mesh.visible = true;
-          a.mesh.position.copy(a.from).lerp(a.to, p * p); // accelerates while falling
-          a.mesh.rotation.y += dt * 6;
-          if (p >= 1) { // landing: the particle disappears, the tower grows, the cage pulses
-            a.landed = true;
-            s.group.remove(a.mesh); a.mesh.material.dispose();
-            s.pulse = 1;
-          }
-        } else {
-          a.popT += dt;
-          setTower(s, a.k, easeOutBack(Math.min(1, a.popT / POP)));
-          const flash = Math.max(0, 1 - a.popT / FLASH); // white flash fading to the real color
-          const col = s.mesh.instanceColor.array;
-          for (let c = 0; c < 3; c++) col[a.k * 3 + c] = s.base[a.k * 3 + c] * (1 - flash) + 2.4 * flash;
+          fall(a, p);
+          if (p < 1) continue;
+          a.landed = true; // landing: the falling tower is replaced by the tower of the block (same size), the cage pulses
+          s.group.remove(a.mesh); a.mesh.material.dispose();
+          s.pulse = 1;
         }
+        a.landT += dt; // time since landing
+        setTower(s, a.k, 1 - SQUASH * Math.sin(Math.PI * Math.min(1, a.landT / SETTLE))); // lands full-size, squashes a little
+        const flash = Math.max(0, 1 - a.landT / FLASH); // white flash fading to the real color
+        const col = s.mesh.instanceColor.array;
+        for (let c = 0; c < 3; c++) col[a.k * 3 + c] = s.base[a.k * 3 + c] * (1 - flash) + 2.4 * flash;
       }
       s.mesh.instanceMatrix.needsUpdate = true;
       s.mesh.instanceColor.needsUpdate = true;
-      s.arrivals = s.arrivals.filter((a) => !(a.landed && a.popT > FLASH));
+      s.arrivals = s.arrivals.filter((a) => !(a.landed && a.landT > FLASH));
     }
 
     let layoutOrder = BTC.config.defaultOrder;
@@ -309,7 +323,8 @@
         if (k === undefined) { slot.group.remove(a.mesh); a.mesh.material.dispose(); continue; }
         const r = slot.rects[k];
         a.k = k;
-        a.to.set(r.x + r.w / 2 - SIZE / 2, a.mesh.scale.y / 2, r.y + r.h / 2 - SIZE / 2);
+        a.to.set(r.x + r.w / 2 - SIZE / 2, 0, r.y + r.h / 2 - SIZE / 2);
+        sizeTower(a.mesh, r.w, slot.heights[k], r.h); // its cell may have changed shape
         slot.arrivals.push(a);
         setTower(slot, k, 0);
       }
@@ -525,7 +540,7 @@
         s.txs = txs;
         buildMesh(s, first, incoming);
       },
-      /** items: [{ rate? }], transactions that just entered the mempool: they fall toward the next block. */
+      /** items: [{ rate?, vsize? }], transactions that just entered the mempool: they fall toward the next block as their tower. */
       stream(items) {
         if (reduceMotion || !visible) return;
         for (const s of slots.values()) if (s.kind === 'next') streamInto(s, items);

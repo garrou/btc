@@ -12,13 +12,13 @@
     return {
       /**
        * Adds txs ({txid, fee?, vsize?, value?}); already seen ones are ignored.
-       * Returns the [{rate}] of the new txs for which `isAnimatedElsewhere(txid)` is false (they get the falling-cube effect).
+       * Returns the [{rate, vsize}] of the new txs for which `isAnimatedElsewhere(txid)` is false (they fall toward the block).
        */
       push(list, isAnimatedElsewhere = () => false, now = Date.now()) {
         const stream = [];
         for (const t of list) {
           if (!t || !t.txid || seen.has(t.txid)) continue;
-          if (!isAnimatedElsewhere(t.txid)) stream.push({ rate: BTC.txs.feeRate(t) });
+          if (!isAnimatedElsewhere(t.txid)) stream.push({ rate: BTC.txs.feeRate(t), vsize: t.vsize });
           seen.add(t.txid);
           total++;
           stamps.push(now);
