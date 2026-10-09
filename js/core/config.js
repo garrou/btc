@@ -19,7 +19,10 @@
     scene: {
       nextId: 'next',       // id of the "next block" slot
       shown: 12,            // mined blocks shown in 3D (besides the next one)
-      detail: 4,            // the most recent (and the selected) blocks are detailed; the others are a simplified shape
+      detailRadius: 4,      // blocks within this many slots of the camera are loaded in detail (farther ones fade into the fog)
+      cache: 48,            // mined blocks whose contents stay in memory: they never change, so each is downloaded once
+      loads: 3,             // simultaneous block downloads (the block nearest to the camera goes first)
+      loadTimeoutMs: 20000, // a download that takes longer frees its slot and is retried
       size: 40,             // side of a block's platform
       pitch: 60,            // distance between two blocks
       frameH: 16,           // height of the cage

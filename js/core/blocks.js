@@ -38,14 +38,35 @@
     return idx < offset || idx >= offset + size ? Math.max(0, idx - 2) : offset;
   }
 
-  /** Does the 3D scene want the full detail (every tx) of this block? Recent blocks of the window, and the selected one. */
-  function wantsDetail(windowBlocks, id, focusId, detailCount) {
+  /**
+   * Distance, in slots, between a block of the window and the slot the camera is on (null when the block is not in the
+   * window). The next block sits just before the first mined one; an unknown focus counts as the first block.
+   */
+  function slotDistance(windowBlocks, id, focusId, nextId = BTC.config.scene.nextId) {
     const i = windowBlocks.findIndex((b) => b.id === id);
-    return i >= 0 && (i < detailCount || id === focusId);
+    if (i < 0) return null;
+    const f = focusId === nextId ? -1 : Math.max(0, windowBlocks.findIndex((b) => b.id === focusId));
+    return Math.abs(i - f);
+  }
+
+  /** Is this block of the window within `radius` slots of the camera? */
+  function isNear(windowBlocks, id, focusId, radius) {
+    const d = slotDistance(windowBlocks, id, focusId);
+    return d !== null && d <= radius;
+  }
+
+  /**
+   * Does the 3D scene draw this block in detail (every tx)? Yes for the blocks around the camera (farther ones fade into
+   * the fog), and for any block of the window whose contents are already known: a mined block never changes, so what was
+   * loaded once stays detailed for as long as the block is shown.
+   */
+  function wantsDetail(windowBlocks, id, focusId, radius, isKnown = () => false) {
+    const d = slotDistance(windowBlocks, id, focusId);
+    return d !== null && (d <= radius || isKnown(id));
   }
 
   /** Fill of a block as a percentage of the 4 MWU capacity. */
   const fillPercent = (b) => ((b.weight || 0) / BTC.config.scene.blockWeight) * 100;
 
-  BTC.blocks = { merge, sameList, tipOf, insertedAbove, windowOf, ensureVisible, wantsDetail, fillPercent };
+  BTC.blocks = { merge, sameList, tipOf, insertedAbove, windowOf, ensureVisible, slotDistance, isNear, wantsDetail, fillPercent };
 })();

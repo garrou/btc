@@ -341,7 +341,7 @@
     }
 
     // ----- interaction -----
-    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), box = new THREE.Box3();
+    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), box = new THREE.Box3(), entry = new THREE.Vector3();
     let hover = null, pending = null, down = null, visible = true;
 
     function setHover(h) {
@@ -371,13 +371,20 @@
       const r = canvas.getBoundingClientRect();
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(ndc, camera);
-      let best = null;
+      // pre-test on the cages: avoids testing thousands of instances for blocks outside the ray. The cages it crosses are
+      // tried nearest first, and the search stops once a tower is hit closer than the next cage (many blocks are detailed).
+      const crossed = [];
       for (const slot of slots.values()) {
         if (!slot.mesh) continue;
-        // pre-test on the cage: avoids testing thousands of instances for blocks outside the ray
         const { x, y } = slot.group.position; // the group falls into place when created: follow it
         box.min.set(x - SIZE / 2, y, -SIZE / 2); box.max.set(x + SIZE / 2, y + FRAME_H, SIZE / 2);
-        if (!ray.ray.intersectsBox(box)) continue;
+        if (!ray.ray.intersectBox(box, entry)) continue;
+        crossed.push({ slot, near: box.containsPoint(ray.ray.origin) ? 0 : entry.distanceTo(ray.ray.origin) });
+      }
+      crossed.sort((a, b) => a.near - b.near);
+      let best = null;
+      for (const { slot, near } of crossed) {
+        if (best && best.dist <= near) break;
         slot.group.updateMatrixWorld(true);
         const hit = ray.intersectObject(slot.mesh)[0];
         if (hit && (!best || hit.distance < best.dist)) best = { slot, id: hit.instanceId, dist: hit.distance };
