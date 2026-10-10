@@ -51,8 +51,6 @@
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     const sun = new THREE.DirectionalLight(0xfff1dd, 1.1); sun.position.set(30, 60, 20); scene.add(sun);
 
-    const grid = new THREE.GridHelper(900, 150, 0x3a2a10, 0x1a1e2b); grid.position.y = -0.82; scene.add(grid);
-
     let composer = null;
     if (THREE.EffectComposer && THREE.RenderPass && THREE.UnrealBloomPass) {
       composer = new THREE.EffectComposer(renderer);
