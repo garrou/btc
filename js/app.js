@@ -26,7 +26,7 @@
   } catch (e) { console.warn('3D scene unavailable (no WebGL?)', e); scene = null; }
 
   // ----- views -----
-  ui.detail.init({ onOpenTx: details.openTx, onOpenBlock: details.openBlock });
+  ui.detail.init({ onOpenTx: details.openTx, onOpenBlock: details.openBlock, onOpenAddress: details.openAddress, onMoreTxs: details.moreAddressTxs });
   ui.feed.init({ onOpenTx: details.openTx });
   ui.blocksRow.init({
     onSelect: (id) => (scene ? nav.focus(id) : details.openBlock(id)), // without 3D, a click opens the details

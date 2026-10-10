@@ -32,6 +32,12 @@
     blockSummary: (hash) => get(`/v1/block/${hash}/summary`),
     blockTxids: (hash) => get(`/block/${hash}/txids`),
     tx: (txid) => get(`/tx/${txid}`),
+    /** Totals of an address ({address, chain_stats, mempool_stats}); an address without history gives zeros. 400 = not a valid address. */
+    address: (address) => get(`/address/${encodeURIComponent(address)}`),
+    /** Transactions of an address, newest first: the unconfirmed ones (up to 50), then the 25 latest confirmed. */
+    addressTxs: (address) => get(`/address/${encodeURIComponent(address)}/txs`),
+    /** The 25 confirmed transactions of an address that come after `lastTxid` (the oldest one already known). */
+    addressTxsAfter: (address, lastTxid) => get(`/address/${encodeURIComponent(address)}/txs/chain/${lastTxid}`),
     /** ~10 latest transactions that entered the mempool, newest first. */
     recent: () => get('/mempool/recent'),
     hashrate3d: () => get('/v1/mining/hashrate/3d'),

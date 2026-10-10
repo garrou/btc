@@ -8,13 +8,17 @@
   /** Number with a fixed count of decimals, e.g. fixed(1234.5, 1) -> "1,234.5". */
   const fixed = (n, d = 1) => n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 
+  /** Amount in satoshis as "0.5 BTC" (trailing zeros trimmed). */
+  const btc = (sats) => (sats / 1e8).toFixed(8).replace(/\.?0+$/, '') + ' BTC';
+
   BTC.format = {
     number: (n) => nf.format(n),
     fixed,
     /** "abcdefghij…12345678" for long strings (hashes, ids). */
     short: (s, head = 10, tail = 8) => (s.length > head + tail + 1 ? `${s.slice(0, head)}…${s.slice(-tail)}` : s),
-    /** Amount in satoshis as "0.5 BTC" (trailing zeros trimmed). */
-    btc: (sats) => (sats / 1e8).toFixed(8).replace(/\.?0+$/, '') + ' BTC',
+    btc,
+    /** Change of a balance, in satoshis, as "+0.5 BTC" / "-0.1 BTC". */
+    btcSigned: (sats) => `${sats < 0 ? '-' : '+'}${btc(Math.abs(sats))}`,
     date: (ts) => new Date(ts * 1000).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'medium' }),
     /** "3 min ago" for a unix timestamp (seconds). */
     ago(ts, nowMs = Date.now()) {

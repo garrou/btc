@@ -1018,3 +1018,13 @@ dialog::backdrop {
 /* the dialog itself takes the initial focus (no ring on the close button); keyboard focus still shows a single ring */
 dialog:focus { outline: none; }
 button:focus-visible:hover { border-color: var(--line); } /* one orange contour at a time: the focus ring, not ring + hover border */
+
+/* address page: what each transaction did to the balance, the lines of the address itself, "load more" */
+.tx-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .1rem .75rem; margin: .2rem 0 .5rem; font-size: .85rem; color: var(--muted); }
+.tx-meta .pending { color: var(--accent); }
+.amt { font: .85rem var(--mono); white-space: nowrap; }
+.amt.up { color: var(--ok); }
+.amt.down { color: var(--bad); }
+.io li.mine { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 4px; padding-inline: .3rem; }
+.io li.mine .mono { color: var(--text); font-weight: 600; }
+.addr-more { display: block; margin: 1rem auto 0; }

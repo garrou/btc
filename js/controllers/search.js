@@ -1,4 +1,4 @@
-// The search box: a height or a block hash shows the block in the 3D scene; a transaction id opens its detail.
+// The search box: a height or a block hash shows the block in the 3D scene; a transaction id or an address opens its detail.
 (() => {
   'use strict';
   const BTC = (window.BTC = window.BTC || {});
@@ -23,7 +23,8 @@
         }
         throw new Error('no block or transaction with this id');
       }
-      BTC.ui.detail.message('Not recognized: enter a height, a block hash or a txid (64 hex).');
+      if (q.type === 'address') return await BTC.details.openAddress(q.address);
+      BTC.ui.detail.message('Not recognized: enter a height, a block hash, a txid (64 hex) or an address.');
     } catch (e) {
       if (details.isCurrent(token)) BTC.ui.detail.message(`Not found (${e.message})`);
     }
