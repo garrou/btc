@@ -19,34 +19,33 @@
   /** Highest block height of a list (0 when empty). */
   const tipOf = (list) => list.reduce((m, b) => Math.max(m, b.height), 0);
 
-  /** Number of blocks inserted above the previous newest block when `previous` became `merged`. */
-  function insertedAbove(previous, merged) {
-    if (!previous.length) return 0;
-    return Math.max(0, merged.findIndex((b) => b.id === previous[0].id));
+  /**
+   * Rank of the slot the camera is on: -1 for the next block (it sits just before the first mined one), the index in
+   * `blocks` otherwise; an unknown id counts as the first block.
+   */
+  function rankOf(blocks, id, nextId = BTC.config.scene.nextId) {
+    return id === nextId ? -1 : Math.max(0, blocks.findIndex((b) => b.id === id));
   }
-
-  /** The blocks shown in 3D: a window over the loaded history (offset 0 = the latest blocks). */
-  const windowOf = (blocks, offset, size) => blocks.slice(offset, offset + size);
 
   /**
-   * Window offset that keeps block `id` visible: unchanged when it is already inside the window, otherwise a window
-   * where the block is the 3rd one (2 newer blocks on its left). Ids not in the list (e.g. the next block) change nothing.
+   * The blocks that exist in 3D when the camera is on `id`: `reach` blocks on each side of it (fewer near the ends of the
+   * list). The window slides with the camera, and a block never changes place in the world (see controllers/scene-sync.js).
    */
-  function ensureVisible(blocks, id, offset, size) {
-    const idx = blocks.findIndex((b) => b.id === id);
-    if (idx < 0) return offset;
-    return idx < offset || idx >= offset + size ? Math.max(0, idx - 2) : offset;
+  function windowAround(blocks, id, reach) {
+    const rank = rankOf(blocks, id);
+    return blocks.slice(Math.max(0, rank - reach), rank + reach + 1);
   }
+
+  /** Index in `blocks` of the first block of that window (0 = the latest blocks, and the next block is part of it). */
+  const windowStart = (blocks, id, reach) => Math.max(0, rankOf(blocks, id) - reach);
 
   /**
    * Distance, in slots, between a block of the window and the slot the camera is on (null when the block is not in the
    * window). The next block sits just before the first mined one; an unknown focus counts as the first block.
    */
-  function slotDistance(windowBlocks, id, focusId, nextId = BTC.config.scene.nextId) {
+  function slotDistance(windowBlocks, id, focusId) {
     const i = windowBlocks.findIndex((b) => b.id === id);
-    if (i < 0) return null;
-    const f = focusId === nextId ? -1 : Math.max(0, windowBlocks.findIndex((b) => b.id === focusId));
-    return Math.abs(i - f);
+    return i < 0 ? null : Math.abs(i - rankOf(windowBlocks, focusId));
   }
 
   /** Is this block of the window within `radius` slots of the camera? */
@@ -68,5 +67,5 @@
   /** Fill of a block as a percentage of the 4 MWU capacity. */
   const fillPercent = (b) => ((b.weight || 0) / BTC.config.scene.blockWeight) * 100;
 
-  BTC.blocks = { merge, sameList, tipOf, insertedAbove, windowOf, ensureVisible, slotDistance, isNear, wantsDetail, fillPercent };
+  BTC.blocks = { merge, sameList, tipOf, windowAround, windowStart, slotDistance, isNear, wantsDetail, fillPercent };
 })();

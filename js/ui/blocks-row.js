@@ -38,11 +38,19 @@
       el('span', {}, `${F.btc(m.totalFees)} fees`));
   }
 
-  /** Scrolls the row horizontally (never the page) so that `card` is centered, or `offset` px from the left edge. */
+  const EDGE = 72; // the ends of the row fade out: a card must stay clear of them
+
+  /**
+   * Scrolls the row horizontally (never the page) so that `card` is in view: not at all when it already is, otherwise
+   * just enough to bring it to the nearest edge (the row is not re-centered at every selection). With `offset`, the
+   * card goes `offset` px from the left edge.
+   */
   function scrollTo(card, offset = null) {
     const chain = $('.chain');
     if (!card || !chain) return;
-    const left = offset != null ? card.offsetLeft - offset : card.offsetLeft - (chain.clientWidth - card.offsetWidth) / 2;
+    const lowest = card.offsetLeft + card.offsetWidth + EDGE - chain.clientWidth; // from here the card is clear of the right edge...
+    const highest = card.offsetLeft - EDGE;                                       // ...up to here (clear of the left edge)
+    const left = offset != null ? card.offsetLeft - offset : Math.min(Math.max(chain.scrollLeft, lowest), highest);
     chain.scrollTo({ left, behavior: 'smooth' });
   }
 

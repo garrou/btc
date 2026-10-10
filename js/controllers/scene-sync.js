@@ -19,8 +19,10 @@
   let running = 0;           // downloads in progress
   let projTimer = 0, projShown = false;
 
-  const windowBlocks = () => BTC.blocks.windowOf(state.blocks, state.sceneOffset, S.shown);
-  const showsNext = () => state.sceneOffset === 0 && !state.detached; // the next block only makes sense next to the latest one
+  // The blocks that exist in 3D: a window that slides with the camera (it is centered on the focused slot).
+  const windowStart = () => BTC.blocks.windowStart(state.blocks, state.focusId, S.reach);
+  const windowBlocks = () => BTC.blocks.windowAround(state.blocks, state.focusId, S.reach);
+  const showsNext = () => !state.detached && windowStart() === 0; // the next block only makes sense next to the latest one
   const known = (id) => { const e = cache.get(id); return !!(e && e.txs && !e.txs.approx); }; // complete contents in memory
   const near = (b) => BTC.blocks.isNear(windowBlocks(), b.id, state.focusId, S.detailRadius);
   const wantsDetail = (b) => BTC.blocks.wantsDetail(windowBlocks(), b.id, state.focusId, S.detailRadius, known);
@@ -148,12 +150,21 @@
     windowBlocks().forEach((b) => { if (wantsDetail(b)) load(b); else demote(b); });
   }
 
-  /** Makes the scene match the state: slots, links, detailed vs light blocks, and the projected block if it is shown. */
-  function sync() {
+  /**
+   * Makes the scene match the state: slots, links, detailed vs light blocks, and the projected block if it is shown.
+   * fresh: id of the block that has just been mined (it slides out of the next block's place).
+   */
+  function sync(fresh = null) {
     const shown = windowBlocks();
+    // Every block keeps its place in the world: the chain is laid out by rank in the list, not by rank in the window, so
+    // the window can slide along without anything moving (the next block, when the chain is live, sits at 0).
+    const first = (state.detached ? 0 : 1) + windowStart();
     scene.setSlots([
-      ...(showsNext() ? [{ id: S.nextId, kind: 'next', label: 'NEXT' }] : []),
-      ...shown.map((b) => ({ id: b.id, kind: 'mined', label: `#${BTC.format.number(b.height)}`, prev: b.previousblockhash })),
+      ...(showsNext() ? [{ id: S.nextId, kind: 'next', label: 'NEXT', pos: 0 }] : []),
+      ...shown.map((b, i) => ({
+        id: b.id, kind: 'mined', label: `#${BTC.format.number(b.height)}`, prev: b.previousblockhash, pos: first + i,
+        ...(b.id === fresh && showsNext() ? { from: 0, fresh: true } : {}),
+      })),
     ]);
     const shownIds = new Set(shown.map((b) => b.id));
     for (const id of [...cache.keys(), ...light, ...retryCount.keys(), ...status.keys()]) {

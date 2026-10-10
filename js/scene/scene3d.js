@@ -115,10 +115,10 @@
       glass.position.y = FRAME_H / 2; group.add(glass);
       const label = labelSprite(meta.label, color);
       label.position.set(0, FRAME_H + 5, 0); group.add(label);
-      group.position.y = 28; // new blocks "fall" into place
+      group.position.set((meta.from ?? meta.pos) * PITCH, 28, 0); // new blocks "fall" into place (from: a mined block starts at the next block's place)
       scene.add(group);
       const slot = {
-        id: meta.id, kind: meta.kind, group, cage, glass, targetX: 0, mesh: null, txs: null,
+        id: meta.id, kind: meta.kind, group, cage, glass, targetX: meta.pos * PITCH, mesh: null, txs: null,
         placer: meta.kind === 'next' ? BTC.layout.stable() : null, // the projected block changes all the time (used by the 'stable' placement)
         list: [], rects: [], heights: [], base: null, t: 0, growing: false, arrivals: [], stream: [], pulse: 0
       };
@@ -467,7 +467,9 @@
         const w = want.get(id);
         if (!w || w[1].id !== l.older) { disposeLink(l); links.delete(id); }
       }
-      for (const [id, [n, o]] of want) if (!links.has(id)) links.set(id, makeLink(n, o, linksReady));
+      // only a block that has just been mined (and the pending link of the next block) animates: the links that appear
+      // at the edge of the window while the camera moves along the chain do not
+      for (const [id, [n, o]] of want) if (!links.has(id)) links.set(id, makeLink(n, o, linksReady && (n.fresh || n.kind === 'next')));
       if (metas.length >= 2) linksReady = true;
     }
 
@@ -528,7 +530,10 @@
       // the camera follows the selected block, translation only (the user-chosen angle is kept)
       const f = slots.get(focusId);
       if (f) {
-        const dx = (f.targetX - controls.target.x) * (snapped ? Math.min(1, dt * 4) : 1);
+        // Within reach, the chain between the two places exists: the camera glides along it. Farther (a search, another
+        // list), nothing is there to glide over: it jumps. (Half a slot of tolerance: the glide never quite finishes.)
+        const gap = f.targetX - controls.target.x;
+        const dx = gap * (snapped && Math.abs(gap) <= (S.reach + 0.5) * PITCH ? Math.min(1, dt * 4) : 1);
         controls.target.x += dx; camera.position.x += dx;
         snapped = true;
       }
@@ -539,11 +544,15 @@
 
     // Public API (everything the controllers need; no app state leaks in)
     return {
-      /** metas: [{ id, kind: 'next' | 'mined', label, prev? }] from left to right (`prev`: hash of the parent block). Slots no longer listed are removed. */
+      /**
+       * metas: [{ id, kind: 'next' | 'mined', label, pos, prev?, from?, fresh? }] from left to right. pos: place in the
+       * chain (the world slot, the next block is 0): a slot keeps its place whatever the others do. prev: hash of the
+       * parent block. from: pos a new slot starts from; fresh: a block that has just been mined. Slots no longer listed are removed.
+       */
       setSlots(metas) {
         const keep = new Set(metas.map((m) => m.id));
         for (const s of [...slots.values()]) if (!keep.has(s.id)) removeSlot(s);
-        metas.forEach((m, i) => { (slots.get(m.id) || makeSlot(m)).targetX = i * PITCH; });
+        metas.forEach((m) => { (slots.get(m.id) || makeSlot(m)).targetX = m.pos * PITCH; });
         syncLinks(metas);
       },
       /** Number of transactions (towers) a slot currently displays; 0 for an empty or unknown slot. */

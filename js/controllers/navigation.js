@@ -43,12 +43,10 @@
   function focus(id, auto = false) {
     if (!sync().active()) return;
     if (!auto) { setFollow(false); liveRequest++; } // a manual choice also cancels a pending "back to live"
-    if (id === S.nextId && (state.sceneOffset > 0 || state.detached)) { showLive(S.nextId); return; }
+    if (id === S.nextId && state.detached) { showLive(S.nextId); return; } // the next block belongs to the live chain
     state.focusId = id;
     state.selectedId = id === S.nextId ? null : id;
-    // move the 3D window when the block is outside of it (history)
-    const offset = BTC.blocks.ensureVisible(state.blocks, id, state.sceneOffset, S.shown);
-    if (offset !== state.sceneOffset) { state.sceneOffset = offset; sync().sync(); }
+    sync().sync(); // the 3D window slides with the camera; the chain itself never moves, so the camera only glides along it
     sync().focus(id);
     ui().blocksRow.select(id);
     refreshHud();
@@ -73,11 +71,7 @@
       state.detached = false;
       state.tip = Math.max(state.tip, BTC.blocks.tipOf(list));
       state.blocks = BTC.blocks.merge([], list);
-      state.sceneOffset = 0;
       renderRow();
-      sync().sync();
-    } else {
-      state.sceneOffset = 0;
       sync().sync();
     }
     sync().publishNow();
@@ -89,7 +83,7 @@
   function onFollow(on) {
     state.follow = on;
     if (!on || !sync().active() || !state.blocks.length) return;
-    if (state.sceneOffset > 0 || state.detached) showLive(); else focus(state.blocks[0].id, true);
+    if (state.detached) showLive(); else focus(state.blocks[0].id, true);
   }
 
   // ----- block list -----
@@ -107,19 +101,14 @@
     sync().resetProjection(); // the next block is recomputed, whatever we are looking at
     BTC.statsCtl.maybeRefresh(); // a new block moves the retarget progress
     if (state.detached) return; // browsing a searched block: the live list is reloaded when coming back
-    const before = state.blocks;
-    state.blocks = BTC.blocks.merge(before, [b]);
-    // follow: back to the latest blocks; otherwise keep the same window (indexes shifted by the blocks added above it),
-    // and keep the selected block inside it
-    if (state.follow) state.sceneOffset = 0; else if (state.sceneOffset > 0) state.sceneOffset += BTC.blocks.insertedAbove(before, state.blocks);
-    state.sceneOffset = BTC.blocks.ensureVisible(state.blocks, state.focusId, state.sceneOffset, S.shown);
+    state.blocks = BTC.blocks.merge(state.blocks, [b]);
     renderRow(b.id);
     // the new block must sit on the block we have just below it; if not (a missed block, a deeper reorganization),
     // load the latest blocks again
     const parent = state.blocks.find((x) => x.height === b.height - 1);
     if (state.blocks.length > 1 && (!parent || (b.previousblockhash && parent.id !== b.previousblockhash))) loadBlocks();
     if (!sync().active()) return;
-    sync().sync();
+    sync().sync(b.id);
     if (state.follow) focus(b.id, true); else ensureFocusExists();
   }
 
@@ -131,10 +120,7 @@
     const merged = BTC.blocks.merge(state.blocks, list);
     if (BTC.blocks.sameList(merged, state.blocks)) return; // nothing new
     const first = !state.blocks.length;
-    const above = BTC.blocks.insertedAbove(state.blocks, merged);
-    if (above > 0 && state.sceneOffset > 0) state.sceneOffset += above;
     state.blocks = merged;
-    state.sceneOffset = BTC.blocks.ensureVisible(state.blocks, state.focusId, state.sceneOffset, S.shown);
     renderRow();
     if (!sync().active()) return;
     if (!first) sync().resetProjection();
@@ -163,6 +149,10 @@
       if (state.blocks.at(-1)?.id !== oldest.id) return; // the list was replaced meanwhile (search, back to live): drop this page
       state.blocks = BTC.blocks.merge(state.blocks, list);
       renderRow();
+      if (sync().active()) {
+        sync().sync(); // the chain goes on: the new blocks within reach of the camera appear next to the old ones
+        if (state.focusId === oldest.id) focus(list[0].id, true); // the camera was at the end of the chain: it carries on
+      }
       ui().blocksRow.reveal(list[0].id);
     } catch (e) {
       console.warn('older blocks', e);
@@ -197,12 +187,11 @@
       if (!target) throw new Error('no block at this height');
       state.detached = true;
       state.blocks = list;
-      state.sceneOffset = 0;
       renderRow();
       sync().sync();
     }
     ui().detail.close();
-    focus(target.id); // manual choice: turns "follow" off and moves the 3D window if needed
+    focus(target.id); // manual choice: turns "follow" off and moves the camera (the 3D window slides with it)
   }
 
   BTC.nav = { focus, onFollow, addBlock, refreshBlocks, loadBlocks, loadOlder, goToBlock, refreshHud };

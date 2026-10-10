@@ -6,7 +6,6 @@
   BTC.state = {
     blocks: [],        // loaded blocks, newest first (the latest ones, or a window around a searched block when detached)
     upcoming: [],      // projected blocks from the mempool
-    sceneOffset: 0,    // first block of `blocks` shown in 3D (0 = the latest blocks, with the next block)
     detached: false,   // true while browsing around a searched block: `blocks` is no longer the live list
     tip: 0,            // height of the latest known block
     follow: true,      // keep the camera on the latest block

@@ -18,7 +18,7 @@
     },
     scene: {
       nextId: 'next',       // id of the "next block" slot
-      shown: 12,            // mined blocks shown in 3D (besides the next one)
+      reach: 6,             // blocks on each side of the camera that exist in 3D: the chain slides with it, farther ones are lost in the fog
       detailRadius: 4,      // blocks within this many slots of the camera are loaded in detail (farther ones fade into the fog)
       cache: 48,            // mined blocks whose contents stay in memory: they never change, so each is downloaded once
       loads: 3,             // simultaneous block downloads (the block nearest to the camera goes first)
