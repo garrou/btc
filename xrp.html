@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XRP Ledger Explorer</title>
+  <link rel="icon" type="image/svg+xml" href="img/xrp.svg">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/xrp.css">
+</head>
+
+<body>
+  <header class="top">
+    <h1><a class="brand" href="index.html" title="All chains"><img class="logo" src="img/xrp.svg" alt=""> Explorer</a></h1>
+    <nav class="chains" aria-label="Blockchain">
+      <a href="bitcoin.html"><img src="img/bitcoin.svg" alt="" width="16" height="16"> Bitcoin</a>
+      <a href="ethereum.html"><img src="img/ethereum.svg" alt="" width="16" height="16"> Ethereum</a>
+      <a href="solana.html"><img src="img/solana.svg" alt="" width="16" height="16"> Solana</a>
+      <a href="xrp.html" aria-current="page"><img src="img/xrp.svg" alt="" width="16" height="16"> XRP</a>
+    </nav>
+    <form id="search" autocomplete="off">
+      <input id="q" type="search" placeholder="Ledger, transaction hash or address" aria-label="Search">
+      <button type="submit">Search</button>
+    </form>
+    <span id="status" class="pill off">offline</span>
+  </header>
+
+  <main>
+    <section class="stats" aria-label="XRP Ledger network">
+      <div class="stat" title="A ledger closes every 3 to 5 seconds; once validated it is final">
+        <span class="k">Ledger</span>
+        <b id="st-ledger">—</b>
+        <small id="st-ledger-sub">&nbsp;</small>
+      </div>
+      <div class="stat" title="Transactions per second over the ledgers held by the page">
+        <span class="k">Throughput</span>
+        <b id="st-tps">—</b>
+        <small id="st-tps-sub">&nbsp;</small>
+      </div>
+      <div class="stat" title="What the newest ledger is made of: payments, orders of the built-in exchange, trust lines...">
+        <span class="k">Ledger mix</span>
+        <b id="st-mix">—</b>
+        <small id="st-mix-sub">&nbsp;</small>
+      </div>
+      <div class="stat" title="The fee a transaction pays now, in drops (1 XRP = 1,000,000 drops). It is burned. The reference fee is 10 drops">
+        <span class="k">Fee now</span>
+        <b id="st-fee">—</b>
+        <small id="st-fee-sub">&nbsp;</small>
+      </div>
+      <div class="stat" title="Estimate: the transactions of 36 ledgers spread over the last 24 hours, scaled to all the ledgers of the day">
+        <span class="k">Transactions / day</span>
+        <b id="st-day">—</b>
+        <small id="st-day-sub">&nbsp;</small>
+      </div>
+    </section>
+
+    <section class="stage">
+      <div class="hud hud-top">
+        <div class="hud-title"><b id="hud-title">Block</b> <span id="hud-sub" class="muted"></span></div>
+        <div class="hud-actions">
+          <label><input type="checkbox" id="follow" checked> Follow block</label>
+          <label title="Tower order (first layout only when Stable)">Order
+            <select id="order" aria-label="Tower order">
+              <option value="txid">Txid</option>
+              <option value="api">Block order</option>
+              <option value="size">Size</option>
+            </select>
+          </label>
+          <label title="Next block: Stable keeps towers in place, Compact repacks them">Placement
+            <select id="placement" aria-label="Next block placement">
+              <option value="stable">Stable</option>
+              <option value="compact">Compact</option>
+            </select>
+          </label>
+          <button id="hud-details" type="button">Block details</button>
+        </div>
+      </div>
+      <div id="scene">
+        <div id="tip3d" class="tooltip" hidden></div>
+        <div id="scene-msg" class="scene-msg"></div>
+      </div>
+      <div class="hud hud-bottom">
+        <div class="legend" aria-label="Kinds of transaction">
+          <div class="legend-scale"><i id="legend-bar"></i><span id="legend-ticks"></span></div>
+          <span id="legend-max"></span>
+        </div>
+        <small class="muted">area ≈ ledger objects touched · color = kind of transaction · height = fee above the reference one · every ledger shown · click = details</small>
+      </div>
+    </section>
+
+    <section>
+      <h2>Ledgers <small>click = 3D view · double-click = details</small></h2>
+      <div class="chain-wrap">
+        <button type="button" class="nav nav-prev" aria-label="Newer blocks"><svg viewBox="0 0 24 24" width="20"
+            height="20" aria-hidden="true">
+            <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg></button>
+        <div class="chain">
+          <div id="blocks" class="row"></div>
+          <button type="button" id="more-blocks" class="block more" hidden></button>
+        </div>
+        <button type="button" class="nav nav-next" aria-label="Older blocks"><svg viewBox="0 0 24 24" width="20"
+            height="20" aria-hidden="true">
+            <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg></button>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="feed-head">Recent transactions <small id="txcount" title="From the newest blocks the page has read (the XRP Ledger has no mempool to watch), not the network rate"></small>
+        <label class="pause"><input type="checkbox" id="pause"> Pause</label>
+      </h2>
+      <ul id="txs" class="txs js-scroll"></ul>
+    </section>
+  </main>
+
+  <dialog id="detail" tabindex="-1">
+    <button id="close" aria-label="Close">✕</button>
+    <div id="detail-body" class="js-scroll"></div>
+  </dialog>
+
+  <!-- Three.js r147 as classic scripts: works when double-clicked (file://) as well as on a static host -->
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/MaskPass.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <!-- pure logic: no DOM, no network -->
+  <script defer src="js/core/config.js"></script>
+  <!-- the chain the page works with: its numbers and words, read by the engine files below (js/core/chain.js is the contract) -->
+  <script defer src="js/core/chain.js"></script>
+  <script defer src="js/chains/xrp/chain.js"></script>
+  <script defer src="js/core/format.js"></script>
+  <script defer src="js/chains/xrp/core/format.js"></script>
+  <script defer src="js/chains/xrp/core/blocks.js"></script>
+  <script defer src="js/chains/xrp/core/txs.js"></script>
+  <script defer src="js/chains/xrp/core/search.js"></script>
+  <script defer src="js/core/colors.js"></script>
+  <script defer src="js/core/treemap.js"></script>
+  <script defer src="js/core/blocks.js"></script>
+  <script defer src="js/core/feed.js"></script>
+  <!-- data sources -->
+  <script defer src="js/net/jsonrpc.js"></script>
+  <script defer src="js/chains/xrp/data/ws.js"></script>
+  <script defer src="js/chains/xrp/data/blocks.js"></script>
+  <script defer src="js/chains/xrp/data/live.js"></script>
+  <!-- state -->
+  <script defer src="js/state/store.js"></script>
+  <!-- 3D view -->
+  <script defer src="js/scene/scene3d.js"></script>
+  <!-- DOM views -->
+  <script defer src="js/ui/dom.js"></script>
+  <script defer src="js/ui/scroll.js"></script>
+  <script defer src="js/ui/blocks-row.js"></script>
+  <script defer src="js/ui/hud.js"></script>
+  <script defer src="js/ui/dialog.js"></script>
+  <script defer src="js/chains/xrp/ui/detail.js"></script>
+  <script defer src="js/ui/feed.js"></script>
+  <script defer src="js/chains/xrp/ui/stats-bar.js"></script>
+  <!-- orchestration -->
+  <script defer src="js/controllers/scene-sync.js"></script>
+  <script defer src="js/controllers/requests.js"></script>
+  <script defer src="js/controllers/navigation.js"></script>
+  <script defer src="js/chains/xrp/controllers/details.js"></script>
+  <script defer src="js/chains/xrp/controllers/search.js"></script>
+  <script defer src="js/controllers/feed.js"></script>
+  <script defer src="js/chains/xrp/controllers/stats.js"></script>
+  <!-- entry point -->
+  <script defer src="js/app.js"></script>
+</body>
+
+</html>

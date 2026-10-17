@@ -5,8 +5,8 @@
 // app state or the network. Depends on the global THREE scripts (r147); EffectComposer/UnrealBloomPass are optional.
 (function () {
   'use strict';
-  const BTC = (window.BTC = window.BTC || {});
-  const S = BTC.config.scene;
+  const Explorer = (window.Explorer = window.Explorer || {});
+  const S = Explorer.config.scene;
 
   const { size: SIZE, pitch: PITCH, frameH: FRAME_H } = S;
   const GROW = 0.7;         // tower growth duration (s)
@@ -28,7 +28,7 @@
   const BEACON_W = 0.45;    // side of a beacon
   const BEACON_H = FRAME_H + 12; // a beacon rises above the cage
   const MAX_BEACONS = 60;   // per block: a wallet with hundreds of transactions in one block still has all its towers glowing
-  const THEME = { mined: BTC.colors.MINED_BLOCK_HEX, next: BTC.colors.NEXT_BLOCK_HEX };
+  const THEME = { mined: Explorer.colors.MINED_BLOCK_HEX, next: Explorer.colors.NEXT_BLOCK_HEX };
 
   function create(container, opts = {}) {
     if (typeof THREE === 'undefined' || !THREE.OrbitControls) return null; // core or required add-on script missing
@@ -126,7 +126,7 @@
       const slot = {
         id: meta.id, kind: meta.kind, group, cage, glass, targetX: meta.pos * PITCH, mesh: null, txs: null,
         theme: color, mine: new Set(), beacons: new Map(), beaconAt: null, // tracked wallet: its towers in this block, their beacons
-        placer: meta.kind === 'next' ? BTC.layout.stable() : null, // the projected block changes all the time (used by the 'stable' placement)
+        placer: meta.kind === 'next' ? Explorer.layout.stable() : null, // the projected block changes all the time (used by the 'stable' placement)
         list: [], rects: [], heights: [], base: null, t: 0, growing: false, arrivals: [], stream: [], pulse: 0
       };
       slots.set(meta.id, slot);
@@ -299,9 +299,9 @@
     function streamInto(slot, items) {
       for (const it of items) {
         if (slot.stream.length >= MAX_STREAM) break;
-        const color = it.rate != null ? colorOf(BTC.colors.rate(it.rate)) : new THREE.Color(BTC.colors.NEXT_BLOCK_HEX);
+        const color = it.rate != null ? colorOf(Explorer.colors.rate(it.rate)) : new THREE.Color(Explorer.colors.NEXT_BLOCK_HEX);
         const side = 0.7 + Math.random() * 0.6;
-        const t = it.rate != null && it.vsize > 1 ? BTC.layout.nominalTower(it.vsize, it.rate) : { w: side, h: side, height: side };
+        const t = it.rate != null && it.vsize > 1 ? Explorer.layout.nominalTower(it.vsize, it.rate) : { w: side, h: side, height: side };
         const mesh = fallingTower(color, t.w, t.height, t.h);
         const ang = Math.random() * Math.PI * 2, rad = SIZE * (0.8 + Math.random() * 0.6);
         const from = new THREE.Vector3(Math.cos(ang) * rad, FRAME_H + 14 + Math.random() * 14, Math.sin(ang) * rad);
@@ -351,8 +351,8 @@
       s.arrivals = s.arrivals.filter((a) => !(a.landed && a.landT > FLASH));
     }
 
-    let layoutOrder = BTC.config.defaultOrder;
-    let placement = BTC.config.defaultPlacement;
+    let layoutOrder = Explorer.config.defaultOrder;
+    let placement = Explorer.config.defaultPlacement;
 
     function buildMesh(slot, animate, incoming) {
       // In-flight arrival particles survive a rebuild (re-anchored by txid below); everything else is reset.
@@ -376,7 +376,7 @@
       // fill starts afresh. 'compact': every update lays the block out again.
       const stable = slot.placer && placement === 'stable';
       if (stable && animate) slot.placer.reset();
-      const layout = stable ? slot.placer.update(txs, layoutOrder) : BTC.layout.block(txs, layoutOrder);
+      const layout = stable ? slot.placer.update(txs, layoutOrder) : Explorer.layout.block(txs, layoutOrder);
       slot.list = layout.list;
       slot.rects = layout.rects;
       slot.heights = layout.heights;
@@ -624,7 +624,11 @@
         controls.target.x += dx; camera.position.x += dx;
         snapped = true;
       }
-      if (pending) { pick(pending); pending = null; }
+      if (pending) { // a chain's tooltip text that throws must not stop the frame (the pointer is dropped, not retried)
+        const e = pending;
+        pending = null;
+        try { pick(e); } catch (err) { console.warn('tooltip', err); hideTip(); }
+      }
       controls.update();
       composer ? composer.render() : renderer.render(scene, camera);
     })(last);
@@ -665,12 +669,12 @@
       setSummary(id, { fill, rate }) {
         const s = slots.get(id);
         if (!s || s.mesh) return;
-        const h = Math.max(0.8, Math.min(1, fill) * (FRAME_H - 2));
+        const h = Math.max(0.8, Math.min(1, Number.isFinite(fill) ? fill : 0) * (FRAME_H - 2));
         const key = `${h.toFixed(3)}|${rate ?? ''}`;
         if (s.lite && s.liteKey === key) return; // already showing this shape
         disposeLite(s);
         s.liteKey = key;
-        s.liteColor = colorOf(BTC.colors.rate(rate ?? 2));
+        s.liteColor = colorOf(Explorer.colors.rate(rate ?? Explorer.chain.rates.min));
         const m = new THREE.Mesh(unitBox, new THREE.MeshStandardMaterial({ color: s.liteColor.clone(), metalness: 0.35, roughness: 0.5, transparent: true, opacity: 0.85 }));
         m.scale.set(SIZE - 3, h, SIZE - 3);
         s.group.add(m); s.lite = m;
@@ -696,7 +700,7 @@
       focus(id) { focusId = id; },
       // Placement of the projected block: 'stable' (towers stay put) or 'compact' (laid out again at every update).
       setPlacement(mode) {
-        if (!BTC.config.placements.includes(mode) || mode === placement) return;
+        if (!Explorer.config.placements.includes(mode) || mode === placement) return;
         placement = mode;
         for (const s of slots.values()) {
           if (!s.placer || !s.txs || !s.mesh) continue;
@@ -706,7 +710,7 @@
       },
       // Change the layout order: every displayed block is re-laid out, towers glide to their new place.
       setOrder(mode) {
-        if (!BTC.config.orders.includes(mode) || mode === layoutOrder) return;
+        if (!Explorer.config.orders.includes(mode) || mode === layoutOrder) return;
         layoutOrder = mode;
         for (const s of slots.values()) {
           if (!s.txs || !s.mesh) continue;
@@ -717,5 +721,5 @@
     };
   }
 
-  BTC.scene3d = { create };
+  Explorer.scene3d = { create };
 })();

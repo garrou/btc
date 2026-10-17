@@ -1,0 +1,114 @@
+/* What only the Bitcoin page needs (on top of style.css): the inputs and outputs of a transaction, the address page */
+
+.io {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: .5rem;
+}
+
+.io ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.io li {
+  padding: .35rem 0;
+  border-top: 1px solid var(--line);
+  font-size: .85rem;
+  display: flex;
+  justify-content: space-between;
+  gap: .5rem;
+}
+
+@media (max-width: 600px) {
+  .io {
+    grid-template-columns: 1fr;
+  }
+}
+
+.io>div {
+  min-width: 0;
+}
+
+.io li {
+  flex-wrap: wrap;
+}
+
+.io li .mono {
+  flex: 1 1 14rem;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.io li span:last-child {
+  flex: none;
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .io {
+    grid-template-columns: 1fr;
+  }
+
+  .io li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .1rem;
+  }
+
+  .io li .mono {
+    flex: none;
+  }
+
+  .io li span:last-child {
+    margin-left: 0;
+    color: var(--muted);
+  }
+}
+
+/* totals in the tx detail */
+
+.io-total {
+  display: block;
+  font: .8rem var(--mono);
+  color: var(--accent);
+  margin: .1rem 0 .3rem;
+}
+
+.io li.more {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.io li.mine {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 4px;
+  padding-inline: .3rem;
+}
+
+.io li.mine .mono {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.addr-more {
+  display: block;
+  margin: 1rem auto 0;
+}
+
+/* ---------- tracked wallet: "Show in 3D" button, the panel over the scene ---------- */
+
+.show3d {
+  display: block;
+  margin: 0 0 .5rem;
+  color: var(--mine);
+  border-color: var(--mine);
+}
+
+.show3d:hover {
+  border-color: var(--mine);
+  background: color-mix(in srgb, var(--mine) 14%, var(--panel));
+}

@@ -1,7 +1,7 @@
 // Block list logic: merging, history window, selection. Pure (arrays in, arrays/numbers out).
 (() => {
   'use strict';
-  const BTC = (window.BTC = window.BTC || {});
+  const Explorer = (window.Explorer = window.Explorer || {});
 
   /**
    * Merges block lists (dedup by id, incoming entries replace existing ones), newest first. The incoming blocks are the
@@ -23,7 +23,7 @@
    * Rank of the slot the camera is on: -1 for the next block (it sits just before the first mined one), the index in
    * `blocks` otherwise; an unknown id counts as the first block.
    */
-  function rankOf(blocks, id, nextId = BTC.config.scene.nextId) {
+  function rankOf(blocks, id, nextId = Explorer.config.scene.nextId) {
     return id === nextId ? -1 : Math.max(0, blocks.findIndex((b) => b.id === id));
   }
 
@@ -64,8 +64,5 @@
     return d !== null && (d <= radius || isKnown(id));
   }
 
-  /** Fill of a block as a percentage of the 4 MWU capacity. */
-  const fillPercent = (b) => ((b.weight || 0) / BTC.config.scene.blockWeight) * 100;
-
-  BTC.blocks = { merge, sameList, tipOf, windowAround, windowStart, slotDistance, isNear, wantsDetail, fillPercent };
+  Explorer.blocks = { merge, sameList, tipOf, windowAround, windowStart, slotDistance, isNear, wantsDetail };
 })();

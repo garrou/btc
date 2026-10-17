@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bitcoin Explorer</title>
+  <link rel="icon" type="image/svg+xml" href="img/bitcoin.svg">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/bitcoin.css">
+</head>
+
+<body>
+  <header class="top">
+    <h1><a class="brand" href="index.html" title="All chains"><img class="logo" src="img/bitcoin.svg" alt=""> Explorer</a></h1>
+    <nav class="chains" aria-label="Blockchain">
+      <a href="bitcoin.html" aria-current="page"><img src="img/bitcoin.svg" alt="" width="16" height="16"> Bitcoin</a>
+      <a href="ethereum.html"><img src="img/ethereum.svg" alt="" width="16" height="16"> Ethereum</a>
+      <a href="solana.html"><img src="img/solana.svg" alt="" width="16" height="16"> Solana</a>
+      <a href="xrp.html"><img src="img/xrp.svg" alt="" width="16" height="16"> XRP</a>
+    </nav>
+    <form id="search" autocomplete="off">
+      <input id="q" type="search" placeholder="Height, block hash, txid or address" aria-label="Search">
+      <button type="submit">Search</button>
+    </form>
+    <span id="status" class="pill off">offline</span>
+  </header>
+
+  <main>
+    <section class="stats" aria-label="Bitcoin network">
+      <div class="stat">
+        <span class="k">Hashrate</span>
+        <b id="st-hash">—</b>
+        <small id="st-hash-sub">current estimate</small>
+      </div>
+      <div class="stat">
+        <span class="k">Difficulty</span>
+        <b id="st-diff">—</b>
+        <small id="st-diff-sub">&nbsp;</small>
+      </div>
+      <div class="stat" title="Estimated change at the next adjustment (every 2,016 blocks)">
+        <span class="k">Next adjustment</span>
+        <b id="st-adj">—</b>
+        <small id="st-adj-sub">&nbsp;</small>
+        <i class="bar"><u id="st-adj-bar"></u></i>
+      </div>
+      <div class="stat" id="st-power-box">
+        <span class="k">Estimated power</span>
+        <b id="st-power">—</b>
+        <small id="st-power-sub">&nbsp;</small>
+      </div>
+      <div class="stat" title="Transactions in the blocks of the last 24 hours (the blocks are read once and refreshed every 10 minutes)">
+        <span class="k">Transactions / day</span>
+        <b id="st-day">—</b>
+        <small id="st-day-sub">&nbsp;</small>
+      </div>
+    </section>
+
+    <section class="stage">
+      <div class="hud hud-top">
+        <div class="hud-title"><b id="hud-title">Block</b> <span id="hud-sub" class="muted"></span></div>
+        <div class="hud-actions">
+          <label><input type="checkbox" id="follow" checked> Follow block</label>
+          <label title="Tower order (first layout only when Stable)">Order
+            <select id="order" aria-label="Tower order">
+              <option value="txid">Txid</option>
+              <option value="api">Fee rate (block order)</option>
+              <option value="size">Size</option>
+            </select>
+          </label>
+          <label title="Next block: Stable keeps towers in place, Compact repacks them">Placement
+            <select id="placement" aria-label="Next block placement">
+              <option value="stable">Stable</option>
+              <option value="compact">Compact</option>
+            </select>
+          </label>
+          <button id="hud-details" type="button">Block details</button>
+        </div>
+      </div>
+      <div id="scene">
+        <div id="tip3d" class="tooltip" hidden></div>
+        <div id="scene-msg" class="scene-msg"></div>
+      </div>
+      <aside id="wallet" class="wallet" aria-label="Tracked address" hidden>
+        <div class="w-head">
+          <button type="button" id="wallet-address" class="link mono"></button>
+          <button type="button" id="wallet-refresh" class="w-btn" aria-label="Reload" title="Reload now">↻</button>
+          <button type="button" id="wallet-toggle" class="w-btn" aria-label="Hide the list" aria-expanded="true" title="Hide the list">▾</button>
+          <button type="button" id="wallet-clear" class="w-btn" aria-label="Stop tracking" title="Stop tracking">✕</button>
+        </div>
+        <p id="wallet-sum" class="w-sum"></p>
+        <div class="w-body">
+          <ul id="wallet-list" class="js-scroll"></ul>
+          <button type="button" id="wallet-more" class="w-more" hidden>Load older</button>
+          <label class="w-dim"><input type="checkbox" id="wallet-dim" checked> Dim the other transactions</label>
+        </div>
+      </aside>
+      <div class="hud hud-bottom">
+        <div class="legend" aria-label="Fee rate scale, sat/vB">
+          <div class="legend-scale"><i id="legend-bar"></i><span id="legend-ticks"></span></div>
+          <span id="legend-max"></span>
+        </div>
+        <small class="muted">area = size · height &amp; color = fee rate · gold = coinbase · click = details</small>
+      </div>
+    </section>
+
+    <section>
+      <h2>Blocks <small>click = 3D view · double-click = details</small></h2>
+      <div class="chain-wrap">
+        <button type="button" class="nav nav-prev" aria-label="Newer blocks"><svg viewBox="0 0 24 24" width="20"
+            height="20" aria-hidden="true">
+            <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg></button>
+        <div class="chain">
+          <div id="upcoming" class="row"></div>
+          <div class="tip" title="Latest block"></div>
+          <div id="blocks" class="row"></div>
+          <button type="button" id="more-blocks" class="block more" hidden></button>
+        </div>
+        <button type="button" class="nav nav-next" aria-label="Older blocks"><svg viewBox="0 0 24 24" width="20"
+            height="20" aria-hidden="true">
+            <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg></button>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="feed-head">Recent transactions <small id="txcount" title="Received by this page (a sample of the mempool), not the network rate"></small>
+        <label class="pause"><input type="checkbox" id="pause"> Pause</label>
+      </h2>
+      <ul id="txs" class="txs js-scroll"></ul>
+    </section>
+  </main>
+
+  <dialog id="detail" tabindex="-1">
+    <button id="close" aria-label="Close">✕</button>
+    <div id="detail-body" class="js-scroll"></div>
+  </dialog>
+
+  <!-- Three.js r147 as classic scripts: works when double-clicked (file://) as well as on a static host -->
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/MaskPass.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <!-- pure logic: no DOM, no network -->
+  <script defer src="js/core/config.js"></script>
+  <!-- the chain the page works with: its numbers and words, read by the engine files below (js/core/chain.js is the contract) -->
+  <script defer src="js/core/chain.js"></script>
+  <script defer src="js/chains/bitcoin/chain.js"></script>
+  <script defer src="js/core/format.js"></script>
+  <script defer src="js/chains/bitcoin/core/format.js"></script>
+  <script defer src="js/core/colors.js"></script>
+  <script defer src="js/core/treemap.js"></script>
+  <script defer src="js/chains/bitcoin/core/txs.js"></script>
+  <script defer src="js/core/blocks.js"></script>
+  <script defer src="js/chains/bitcoin/core/projection.js"></script>
+  <script defer src="js/core/feed.js"></script>
+  <script defer src="js/chains/bitcoin/core/stats.js"></script>
+  <script defer src="js/chains/bitcoin/core/address.js"></script>
+  <script defer src="js/chains/bitcoin/core/wallet.js"></script>
+  <script defer src="js/chains/bitcoin/core/search.js"></script>
+  <!-- data sources -->
+  <script defer src="js/chains/bitcoin/data/api.js"></script>
+  <script defer src="js/chains/bitcoin/data/socket.js"></script>
+  <!-- state -->
+  <script defer src="js/state/store.js"></script>
+  <!-- 3D view -->
+  <script defer src="js/scene/scene3d.js"></script>
+  <!-- DOM views -->
+  <script defer src="js/ui/dom.js"></script>
+  <script defer src="js/ui/scroll.js"></script>
+  <script defer src="js/ui/blocks-row.js"></script>
+  <script defer src="js/ui/hud.js"></script>
+  <script defer src="js/ui/dialog.js"></script>
+  <script defer src="js/ui/tracker.js"></script>
+  <script defer src="js/chains/bitcoin/ui/detail.js"></script>
+  <script defer src="js/ui/feed.js"></script>
+  <script defer src="js/chains/bitcoin/ui/stats-bar.js"></script>
+  <!-- orchestration -->
+  <script defer src="js/controllers/scene-sync.js"></script>
+  <script defer src="js/controllers/requests.js"></script>
+  <script defer src="js/controllers/navigation.js"></script>
+  <script defer src="js/chains/bitcoin/controllers/details.js"></script>
+  <script defer src="js/chains/bitcoin/controllers/search.js"></script>
+  <script defer src="js/chains/bitcoin/controllers/wallet.js"></script>
+  <script defer src="js/controllers/feed.js"></script>
+  <script defer src="js/chains/bitcoin/controllers/stats.js"></script>
+  <!-- entry point -->
+  <script defer src="js/app.js"></script>
+</body>
+
+</html>

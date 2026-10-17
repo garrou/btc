@@ -1,9 +1,9 @@
 // Live transaction feed model: dedup, bounded buffer, arrival rate. Pure state (time is passed in).
 (() => {
   'use strict';
-  const BTC = (window.BTC = window.BTC || {});
+  const Explorer = (window.Explorer = window.Explorer || {});
 
-  function create(cfg = BTC.config.feed) {
+  function create(cfg = Explorer.config.feed) {
     const seen = new Set();
     const buffer = [];   // arrivals waiting to be displayed (oldest first)
     const stamps = [];   // arrival times (ms), for the tx/s rate
@@ -11,14 +11,14 @@
 
     return {
       /**
-       * Adds txs ({txid, fee?, vsize?, value?}); already seen ones are ignored.
+       * Adds txs ({txid, rate?, fee?, vsize?, value?}; without `rate` it is fee / vsize); already seen ones are ignored.
        * Returns the [{rate, vsize}] of the new txs for which `isAnimatedElsewhere(txid)` is false (they fall toward the block).
        */
       push(list, isAnimatedElsewhere = () => false, now = Date.now()) {
         const stream = [];
         for (const t of list) {
           if (!t || !t.txid || seen.has(t.txid)) continue;
-          if (!isAnimatedElsewhere(t.txid)) stream.push({ rate: BTC.txs.feeRate(t), vsize: t.vsize });
+          if (!isAnimatedElsewhere(t.txid)) stream.push({ rate: t.rate ?? (t.vsize && t.fee != null ? t.fee / t.vsize : undefined), vsize: t.vsize }); // price per unit of size
           seen.add(t.txid);
           total++;
           stamps.push(now);
@@ -41,5 +41,5 @@
     };
   }
 
-  BTC.feed = { create };
+  Explorer.feed = { create };
 })();

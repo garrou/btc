@@ -1,7 +1,7 @@
 // Minimal DOM helpers shared by the views.
 (() => {
   'use strict';
-  const BTC = (window.BTC = window.BTC || {});
+  const Explorer = (window.Explorer = window.Explorer || {});
 
   const $ = (selector) => document.querySelector(selector);
 
@@ -17,6 +17,6 @@
     return n;
   }
 
-  BTC.dom = { $, el };
-  BTC.ui = BTC.ui || {};
+  Explorer.dom = { $, el };
+  Explorer.ui = Explorer.ui || {};
 })();

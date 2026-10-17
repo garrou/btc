@@ -1,105 +1,91 @@
 // Entry point: creates the views and the optional 3D scene, connects the data sources, wires everything together.
-// Layers (script order in index.html): core/ (pure logic) -> data/ (API, WebSocket) -> state/ -> scene/ (Three.js)
-// -> ui/ (DOM views) -> controllers/ (orchestration) -> this file.
+// It is the engine's: everything specific to a blockchain goes through Explorer.chain (js/core/chain.js).
+// Layers (script order in each chain's page): core/ (pure logic) -> state/ -> scene/ (Three.js) -> ui/ (DOM views)
+// -> controllers/ (orchestration) -> this file; the chain's own files (js/chains/<name>/) load between them.
 (() => {
   'use strict';
-  const BTC = window.BTC;
-  const { $ } = BTC.dom;
-  const F = BTC.format;
-  const { nextId } = BTC.config.scene;
-  const { state, nav, details } = BTC;
-  const ui = BTC.ui;
-
-  // Tooltip line of a tower that belongs to the tracked wallet
-  const mineNote = (txid) => {
-    const e = BTC.walletCtl.entryOf(txid);
-    return e ? `\n★ ${F.btcSigned(e.net)} for ${F.short(state.wallet.address, 8, 6)}` : '';
-  };
+  const Explorer = window.Explorer;
+  const { $ } = Explorer.dom;
+  const { nextId } = Explorer.config.scene;
+  const { state, nav } = Explorer;
+  const chain = Explorer.chain;
+  document.documentElement.style.setProperty('--accent', `#${chain.theme.accent.toString(16).padStart(6, '0')}`); // the chain's color
+  const ui = Explorer.ui;
 
   // ----- 3D scene (optional: needs Three.js and WebGL) -----
   let scene = null;
   try {
-    scene = BTC.scene3d?.create($('#scene'), {
+    scene = Explorer.scene3d?.create($('#scene'), {
       tooltip: $('#tip3d'),
-      describe: (t) => (t.coinbase
-        ? 'Coinbase (block reward)'
-        : t.approx
-          ? `${F.short(t.txid, 12, 8)}\n(size and fee unavailable)`
-          : `${F.short(t.txid, 12, 8)}\n${t.rate.toFixed(1)} sat/vB · ${F.number(t.vsize)} vB\nfee ${F.number(t.fee)} sats`)
-        + mineNote(t.txid),
-      onPick: (t) => details.openTx(t.txid),
+      describe: chain.describeTower, // tooltip text: the chain's words
+      onPick: (t) => chain.openTx(t.txid),
       onFocus: (id) => nav.focus(id),
-      onHighlight: () => BTC.walletCtl.onSceneChange(), // the towers lit for the tracked wallet may have changed
+      onHighlight: () => chain.onHighlight(),
     }) ?? null;
   } catch (e) { console.warn('3D scene unavailable (no WebGL?)', e); scene = null; }
 
   // ----- views -----
-  ui.detail.init({
-    onOpenTx: details.openTx, onOpenBlock: details.openBlock, onOpenAddress: details.openAddress, onMoreTxs: details.moreAddressTxs,
-    onShowInScene: scene ? () => { // light up the transactions of the address page in the 3D scene
-      const a = details.shownAddress();
-      if (!a) return;
-      BTC.walletCtl.track(a.address, a.txs, a.summary);
-      ui.detail.close();
-    } : null,
-  });
-  ui.feed.init({ onOpenTx: details.openTx });
+  ui.dialog.init();
+  ui.feed.init({ onOpenTx: chain.openTx });
   ui.blocksRow.init({
-    onSelect: (id) => (scene ? nav.focus(id) : details.openBlock(id)), // without 3D, a click opens the details
-    onOpen: details.openBlock,
+    onSelect: (id) => (scene ? nav.focus(id) : chain.openBlock(id)), // without 3D, a click opens the details
+    onOpen: chain.openBlock,
     onSelectNext: () => nav.focus(nextId),
     onLoadOlder: nav.loadOlder,
   });
   const prefs = ui.hud.init({
     onFollow: nav.onFollow,
-    onOrder: (mode) => BTC.sceneSync.setOrder(mode),
-    onPlacement: (mode) => BTC.sceneSync.setPlacement(mode),
-    onDetails: () => state.selectedId && details.openBlock(state.selectedId),
+    onOrder: (mode) => Explorer.sceneSync.setOrder(mode),
+    onPlacement: (mode) => Explorer.sceneSync.setPlacement(mode),
+    onDetails: () => state.selectedId && chain.openBlock(state.selectedId),
   });
   if (scene) {
-    BTC.sceneSync.init(scene);
-    BTC.sceneSync.setOrder(prefs.order);
-    BTC.sceneSync.setPlacement(prefs.placement);
-    BTC.walletCtl.setDim(ui.wallet.init({
-      onJump: BTC.walletCtl.jump, onOpenAddress: details.openAddress, onRefresh: BTC.walletCtl.refresh,
-      onClear: BTC.walletCtl.clear, onMore: BTC.walletCtl.loadOlder, onDim: BTC.walletCtl.setDim,
-    }).dim);
-  } else ui.hud.hideStage();
+    Explorer.sceneSync.init(scene);
+    Explorer.sceneSync.setOrder(prefs.order);
+    Explorer.sceneSync.setPlacement(prefs.placement);
+  } else {
+    const reason = typeof THREE === 'undefined' || !THREE.OrbitControls ? 'Three.js did not load (offline?)' : 'WebGL is not available';
+    console.warn('3D view off:', reason);
+    ui.hud.hideStage(reason);
+  }
 
   // ----- search -----
   $('#search').addEventListener('submit', (e) => {
     e.preventDefault();
     const q = $('#q').value.trim();
-    if (q) BTC.searchCtl.run(q);
+    if (q) chain.search(q);
   });
 
   // ----- data sources -----
-  BTC.socket.connect({
-    onStatus: ui.hud.setStatus,
-    onOpen: () => nav.refreshBlocks().catch((e) => console.warn('blocks', e)), // backfill the blocks mined while offline
-    onBlock(b) { nav.addBlock(b); BTC.walletCtl.onBlock(); },
-    onUpcoming(list) {
-      state.upcoming = list;
-      ui.blocksRow.renderUpcoming(list, state.focusId === nextId);
-      if (state.focusId === nextId) nav.refreshHud();
-    },
-    onProjected(raw) { if (scene) BTC.feedCtl.ingest(BTC.sceneSync.onProjected(raw)); },
-    onTransactions: (txs) => BTC.feedCtl.ingest(txs.map(BTC.txs.normalizeProjected)),
-    onTxids: (ids) => BTC.feedCtl.ingest(ids.map((txid) => ({ txid }))),
-  });
+  try {
+    chain.live.connect({
+      onStatus: ui.hud.setStatus,
+      onOpen: () => nav.refreshBlocks().catch((e) => console.warn('blocks', e)), // backfill the blocks mined while offline
+      onBlock(b) { nav.addBlock(b); chain.onBlock(b); },
+      onUpcoming(list) {
+        state.upcoming = list;
+        ui.blocksRow.renderUpcoming(list, state.focusId === nextId);
+        if (state.focusId === nextId) nav.refreshHud();
+      },
+      onProjected(raw) { if (scene) Explorer.feedCtl.ingest(Explorer.sceneSync.onProjected(raw)); },
+      onTransactions: Explorer.feedCtl.ingest,
+      onTxids: Explorer.feedCtl.ingest,
+    });
+  } catch (e) { // a chain whose live connection cannot even start (bad URL...) must not stop the rest of the page
+    console.error('live connection', e);
+    ui.hud.setStatus(false);
+  }
 
   nav.loadBlocks();
-  BTC.statsCtl.refresh();
-  setInterval(BTC.statsCtl.refresh, BTC.config.stats.refreshMs);
-  BTC.feedCtl.poll();
-  setInterval(BTC.feedCtl.poll, BTC.config.feed.pollMs);
-  setInterval(BTC.feedCtl.flush, BTC.config.feed.flushMs);
-  setInterval(ui.blocksRow.refreshAgo, 30000);
+  chain.start({ scene }); // the chain's own screens and timers
+  Explorer.feedCtl.poll();
+  setInterval(Explorer.feedCtl.poll, Explorer.config.feed.pollMs);
+  setInterval(Explorer.feedCtl.flush, Explorer.config.feed.flushMs);
+  setInterval(ui.blocksRow.refreshAgo, 5000); // "x s ago" has a one-second grain under a minute
   document.addEventListener('visibilitychange', () => { // back to the tab: catch up now rather than at the next tick
     if (document.hidden) return;
     ui.blocksRow.refreshAgo();
-    BTC.walletCtl.catchUp();
-    BTC.statsCtl.maybeRefresh();
-    BTC.feedCtl.poll();
+    chain.onVisible();
+    Explorer.feedCtl.poll();
   });
 })();

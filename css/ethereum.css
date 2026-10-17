@@ -1,0 +1,101 @@
+/* What only the Ethereum page needs (on top of style.css) */
+
+/* the dialog */
+.eth-name {
+    color: var(--muted);
+    font-style: normal;
+    font-size: .85em;
+}
+
+.eth-status {
+    display: inline-block;
+    padding: .02rem .5rem;
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    font-size: .8rem;
+}
+
+.eth-status.ok {
+    color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 50%, var(--line));
+}
+
+.eth-status.bad {
+    color: var(--bad);
+    border-color: color-mix(in srgb, var(--bad) 50%, var(--line));
+}
+
+.eth-status.wait {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+
+.eth-warn {
+    color: var(--bad);
+}
+
+.eth-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .15rem .5rem;
+    font-size: .85rem;
+}
+
+.eth-flow .amt {
+    margin-left: auto;
+    color: var(--text);
+}
+
+.eth-flow .link.mono {
+    overflow-wrap: anywhere;
+}
+
+.eth-arrow {
+    color: var(--muted);
+}
+
+.eth-transfers {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.eth-transfers li {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    gap: .1rem .75rem;
+    padding: .45rem 0;
+    border-top: 1px solid var(--line);
+    font-size: .85rem;
+}
+
+.eth-transfers li b {
+    color: var(--accent);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.eth-transfers li small {
+    grid-column: 1 / -1;
+}
+
+/* the statistics bar: the target of the gas bar is half of it */
+.stat .bar.target {
+    position: relative;
+}
+
+.stat .bar.target::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--text);
+    opacity: .55;
+}
+
+.tx-meta .eth-status {
+    margin-left: .4rem;
+}

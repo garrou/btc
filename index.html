@@ -4,178 +4,75 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>₿ Explorer</title>
+  <title>Blockchain Explorer in 3D</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 
-<body>
+<body class="home">
   <header class="top">
-    <h1>₿ Explorer</h1>
-    <form id="search" autocomplete="off">
-      <input id="q" type="search" placeholder="Height, block hash, txid or address" aria-label="Search">
-      <button type="submit">Search</button>
-    </form>
-    <span id="status" class="pill off">offline</span>
+    <h1>Explorer</h1>
   </header>
 
-  <main>
-    <section class="stats" aria-label="Bitcoin network">
-      <div class="stat">
-        <span class="k">Hashrate</span>
-        <b id="st-hash">—</b>
-        <small id="st-hash-sub">current estimate</small>
-      </div>
-      <div class="stat">
-        <span class="k">Difficulty</span>
-        <b id="st-diff">—</b>
-        <small id="st-diff-sub">&nbsp;</small>
-      </div>
-      <div class="stat" title="Estimated change at the next adjustment (every 2,016 blocks)">
-        <span class="k">Next adjustment</span>
-        <b id="st-adj">—</b>
-        <small id="st-adj-sub">&nbsp;</small>
-        <i class="bar"><u id="st-adj-bar"></u></i>
-      </div>
-      <div class="stat" id="st-power-box">
-        <span class="k">Estimated power</span>
-        <b id="st-power">—</b>
-        <small id="st-power-sub">&nbsp;</small>
-      </div>
+  <main class="home-main">
+    <section class="hero">
+      <h2>Watch blocks fill up, in 3D</h2>
+      <p>Every transaction is a tower. Its footprint is the room it takes in its block; its height and color are what it paid (or, where nobody bids, what it is).
+        Pick a blockchain: the same engine draws all of them.</p>
     </section>
 
-    <section class="stage">
-      <div class="hud hud-top">
-        <div class="hud-title"><b id="hud-title">Block</b> <span id="hud-sub" class="muted"></span></div>
-        <div class="hud-actions">
-          <label><input type="checkbox" id="follow" checked> Follow block</label>
-          <label title="Tower order (first layout only when Stable)">Order
-            <select id="order" aria-label="Tower order">
-              <option value="txid">Txid</option>
-              <option value="api">Fee rate (block order)</option>
-              <option value="size">Size</option>
-            </select>
-          </label>
-          <label title="Next block: Stable keeps towers in place, Compact repacks them">Placement
-            <select id="placement" aria-label="Next block placement">
-              <option value="stable">Stable</option>
-              <option value="compact">Compact</option>
-            </select>
-          </label>
-          <button id="hud-details" type="button">Block details</button>
-        </div>
-      </div>
-      <div id="scene">
-        <div id="tip3d" class="tooltip" hidden></div>
-        <div id="scene-msg" class="scene-msg"></div>
-      </div>
-      <aside id="wallet" class="wallet" aria-label="Tracked address" hidden>
-        <div class="w-head">
-          <button type="button" id="wallet-address" class="link mono"></button>
-          <button type="button" id="wallet-refresh" class="w-btn" aria-label="Reload" title="Reload now">↻</button>
-          <button type="button" id="wallet-toggle" class="w-btn" aria-label="Hide the list" aria-expanded="true" title="Hide the list">▾</button>
-          <button type="button" id="wallet-clear" class="w-btn" aria-label="Stop tracking" title="Stop tracking">✕</button>
-        </div>
-        <p id="wallet-sum" class="w-sum"></p>
-        <div class="w-body">
-          <ul id="wallet-list" class="js-scroll"></ul>
-          <button type="button" id="wallet-more" class="w-more" hidden>Load older</button>
-          <label class="w-dim"><input type="checkbox" id="wallet-dim" checked> Dim the other transactions</label>
-        </div>
-      </aside>
-      <div class="hud hud-bottom">
-        <div class="legend" aria-label="Fee rate scale, sat/vB">
-          <div class="legend-scale"><i id="legend-bar"></i><span id="legend-ticks"></span></div>
-          <span id="legend-max"></span>
-        </div>
-        <small class="muted">area = size · height &amp; color = fee rate · gold = coinbase · click = details</small>
-      </div>
+    <section class="cards" aria-label="Blockchains">
+      <a class="card bitcoin" href="bitcoin.html">
+        <img src="img/bitcoin.svg" alt="" width="64" height="64">
+        <h3>Bitcoin</h3>
+        <p class="what">A block about every 10 minutes. Tower: size in virtual bytes, fee rate in sat/vB.</p>
+        <ul>
+          <li>The next block, projected from the mempool</li>
+          <li>Search a height, a hash, a transaction or an address</li>
+          <li>Follow an address in 3D</li>
+        </ul>
+        <span class="go">Open Bitcoin →</span>
+      </a>
+
+      <a class="card ethereum" href="ethereum.html">
+        <img src="img/ethereum.svg" alt="" width="64" height="64">
+        <h3>Ethereum</h3>
+        <p class="what">A block every 12 seconds. Tower: gas used, gas price in gwei.</p>
+        <ul>
+          <li>Base fee of the next block, ETH burned, finality</li>
+          <li>Transactions, token movements, ENS names</li>
+          <li>A guess of the next block from pending transactions</li>
+        </ul>
+        <span class="go">Open Ethereum →</span>
+      </a>
+
+      <a class="card solana" href="solana.html">
+        <img src="img/solana.svg" alt="" width="64" height="64">
+        <h3>Solana</h3>
+        <p class="what">A block every 0.4 second, one in ten shown. Tower: compute (estimated), priority fee paid.</p>
+        <ul>
+          <li>Validators' votes, failed transactions, priority bidders</li>
+          <li>Instructions, balance changes, program log</li>
+          <li>Accounts with their latest transactions</li>
+        </ul>
+        <span class="go">Open Solana →</span>
+      </a>
+
+      <a class="card xrp" href="xrp.html">
+        <img src="img/xrp.svg" alt="" width="64" height="64">
+        <h3>XRP Ledger</h3>
+        <p class="what">A ledger every 3 to 5 seconds, final once validated. Tower: ledger objects touched, colored by kind of transaction.</p>
+        <ul>
+          <li>Payments, exchange orders, trust lines, AMM pools, NFTs</li>
+          <li>Failed transactions, fee now, ledger mix</li>
+          <li>Accounts with their latest transactions</li>
+        </ul>
+        <span class="go">Open XRP →</span>
+      </a>
     </section>
 
-    <section>
-      <h2>Blocks <small>click = 3D view · double-click = details</small></h2>
-      <div class="chain-wrap">
-        <button type="button" class="nav nav-prev" aria-label="Newer blocks"><svg viewBox="0 0 24 24" width="20"
-            height="20" aria-hidden="true">
-            <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-              stroke-linejoin="round" />
-          </svg></button>
-        <div class="chain">
-          <div id="upcoming" class="row"></div>
-          <div class="tip" title="Latest block"></div>
-          <div id="blocks" class="row"></div>
-          <button type="button" id="more-blocks" class="block more" hidden></button>
-        </div>
-        <button type="button" class="nav nav-next" aria-label="Older blocks"><svg viewBox="0 0 24 24" width="20"
-            height="20" aria-hidden="true">
-            <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-              stroke-linejoin="round" />
-          </svg></button>
-      </div>
-    </section>
-
-    <section>
-      <h2 class="feed-head">Recent transactions <small id="txcount" title="Received by this page (a sample of the mempool), not the network rate"></small>
-        <label class="pause"><input type="checkbox" id="pause"> Pause</label>
-      </h2>
-      <ul id="txs" class="txs js-scroll"></ul>
-    </section>
+    <p class="small">The data comes straight from public nodes (mempool.space, publicnode, xrplcluster.com): no account, no key. Those services
+      see your IP address and what you look up. The code is static: open these pages from a folder or any web host.</p>
   </main>
-
-  <dialog id="detail" tabindex="-1">
-    <button id="close" aria-label="Close">✕</button>
-    <div id="detail-body" class="js-scroll"></div>
-  </dialog>
-
-  <!-- Three.js r147 as classic scripts: works when double-clicked (file://) as well as on a static host -->
-  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
-  <script defer
-    src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/MaskPass.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-  <!-- pure logic: no DOM, no network -->
-  <script defer src="js/core/config.js"></script>
-  <script defer src="js/core/format.js"></script>
-  <script defer src="js/core/colors.js"></script>
-  <script defer src="js/core/treemap.js"></script>
-  <script defer src="js/core/txs.js"></script>
-  <script defer src="js/core/blocks.js"></script>
-  <script defer src="js/core/projection.js"></script>
-  <script defer src="js/core/feed.js"></script>
-  <script defer src="js/core/stats.js"></script>
-  <script defer src="js/core/address.js"></script>
-  <script defer src="js/core/wallet.js"></script>
-  <script defer src="js/core/search.js"></script>
-  <!-- data sources -->
-  <script defer src="js/data/api.js"></script>
-  <script defer src="js/data/socket.js"></script>
-  <!-- state -->
-  <script defer src="js/state/store.js"></script>
-  <!-- 3D view -->
-  <script defer src="js/scene/scene3d.js"></script>
-  <!-- DOM views -->
-  <script defer src="js/ui/dom.js"></script>
-  <script defer src="js/ui/scroll.js"></script>
-  <script defer src="js/ui/blocks-row.js"></script>
-  <script defer src="js/ui/hud.js"></script>
-  <script defer src="js/ui/detail.js"></script>
-  <script defer src="js/ui/wallet.js"></script>
-  <script defer src="js/ui/feed.js"></script>
-  <script defer src="js/ui/stats-bar.js"></script>
-  <!-- orchestration -->
-  <script defer src="js/controllers/scene-sync.js"></script>
-  <script defer src="js/controllers/navigation.js"></script>
-  <script defer src="js/controllers/details.js"></script>
-  <script defer src="js/controllers/search.js"></script>
-  <script defer src="js/controllers/wallet.js"></script>
-  <script defer src="js/controllers/feed.js"></script>
-  <script defer src="js/controllers/stats.js"></script>
-  <!-- entry point -->
-  <script defer src="js/app.js"></script>
 </body>
 
 </html>
